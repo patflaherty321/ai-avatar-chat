@@ -23,6 +23,7 @@ app.use(cors({
     const allowedOrigins = [
       'http://localhost:3000',
       'http://localhost:3002',
+      'https://ai-avatar-chat-dusky.vercel.app', // Vercel frontend
       process.env.FRONTEND_URL
     ].filter(Boolean); // Filter out undefined values
     
