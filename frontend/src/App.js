@@ -70,8 +70,8 @@ function App() {
       // Desktop: reduced scale from 1.8 to 1.5 as requested
       scale = 1.5; // Reduced from 1.8 for better frame filling
     } else if (currentWidth >= 960) {
-      // Tablet/larger mobile: new breakpoint for 960-1080px range
-      scale = 1.7; // Fill frame better in this range
+      // Tablet/larger mobile: increased scale to fill frame better and avoid box-like appearance
+      scale = 2.0; // Increased from 1.7 to eliminate box-like appearance in 960-1080px range
     } else {
       // Mobile: scale optimized for 4000x4000px high-res Rive file
       scale = 2.2; // Reduced from 4.5 for high-resolution Rive file
