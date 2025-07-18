@@ -393,23 +393,25 @@ function App() {
       {/* Exact Figma Design Implementation */}
       <div style={{
         width: '100%', 
-        height: '100vh', 
+        minHeight: '100vh', // Changed from height to minHeight to allow natural sizing
         background: '#7C7C7C', 
         flexDirection: 'column', 
         justifyContent: 'flex-start', 
         alignItems: 'center', 
         display: 'flex',
-        boxSizing: 'border-box'
+        boxSizing: 'border-box',
+        paddingBottom: '20px' // Add bottom padding for spacing
       }}>
         
         {/* Main Section - Avatar and Chat Panel */}
         <div style={{
           width: '100%',
           position: 'relative',
-          flex: 1, // Allow this section to grow and fill available space
+          flex: '0 0 auto', // Changed from flex: 1 to not take all available space
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center'
+          justifyContent: 'center',
+          paddingTop: '20px' // Add top padding for spacing
         }}>
           <div style={{
             display: 'flex',
@@ -586,7 +588,7 @@ function App() {
           width: '100%',
           position: 'relative',
           flexShrink: 0,
-          marginTop: 'auto' // Push to bottom
+          marginTop: '20px' // Changed from 'auto' to fixed 20px spacing from panels above
         }}>
           <div style={{
             display: 'flex',
