@@ -26,7 +26,7 @@ function Avatar({
 
   // Initialize Rive
   const { RiveComponent, rive } = useRive({
-    src: '/avatar.riv',
+    src: '/avatar-1.riv',
     stateMachines: 'State Machine 1',
     autoplay: true,
   });
