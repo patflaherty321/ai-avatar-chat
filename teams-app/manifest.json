@@ -1,0 +1,42 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.16/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.16",
+  "version": "1.0.0",
+  "id": "D484681A-11EB-43B7-A393-AA37681E31B0",
+  "packageName": "com.patflaherty.aiavatar",
+  "developer": {
+    "name": "Pat Flaherty",
+    "websiteUrl": "https://ai-avatar-chat-dusky.vercel.app",
+    "privacyUrl": "https://ai-avatar-chat-dusky.vercel.app/privacy",
+    "termsOfUseUrl": "https://ai-avatar-chat-dusky.vercel.app/terms"
+  },
+  "name": {
+    "short": "AI Avatar Chat",
+    "full": "AI Avatar Chat - Interactive AI Companion"
+  },
+  "description": {
+    "short": "Interactive AI Avatar Chat application",
+    "full": "An interactive AI Avatar Chat application that provides conversational AI with visual avatar responses, integrated seamlessly into Microsoft Teams."
+  },
+  "icons": {
+    "outline": "outline.png",
+    "color": "color.png"
+  },
+  "accentColor": "#007AFF",
+  "staticTabs": [
+    {
+      "entityId": "aiAvatarTab",
+      "name": "AI Avatar Chat",
+      "contentUrl": "https://ai-avatar-chat-dusky.vercel.app",
+      "websiteUrl": "https://ai-avatar-chat-dusky.vercel.app",
+      "scopes": ["personal", "team"]
+    }
+  ],
+  "permissions": [
+    "identity",
+    "messageTeamMembers"
+  ],
+  "validDomains": [
+    "ai-avatar-chat-dusky.vercel.app"
+  ]
+}
