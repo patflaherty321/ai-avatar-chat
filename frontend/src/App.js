@@ -442,20 +442,20 @@ function App() {
               {/* Avatar-MAIN */}
               <div style={{
                 flex: windowWidth < 1080 ? '0 0 auto' : '0 0 450px',
-                height: windowWidth < 1080 ? 300 : 460, // Changed from 350 to 300 for mobile
+                height: windowWidth < 1080 ? 275 : 460, // Changed from 300 to 275 for mobile
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'flex-start',
                 justifyContent: 'center',
                 padding: 0,
                 position: 'relative',
-                minHeight: windowWidth < 1080 ? '300px' : '350px', // Keep minHeight at 300px
+                minHeight: windowWidth < 1080 ? '275px' : '350px', // Changed from 300px to 275px
                 minWidth: windowWidth < 1080 ? '100%' : '330px',
                 width: windowWidth < 1080 ? '100%' : 'auto'
               }}>
                 <div style={{
                   alignSelf: 'stretch',
-                  height: windowWidth < 1080 ? 300 : 460, // Changed from 350 to 300 for mobile
+                  height: windowWidth < 1080 ? 275 : 460, // Changed from 300 to 275 for mobile
                   borderRadius: 32,
                   overflow: 'hidden',
                   position: 'relative',
@@ -463,7 +463,7 @@ function App() {
                   flexGrow: 1,
                   flexShrink: 0,
                   flexBasis: 0,
-                  minHeight: windowWidth < 1080 ? '300px' : '380px',
+                  minHeight: windowWidth < 1080 ? '275px' : '380px', // Changed from 300px to 275px
                   minWidth: windowWidth < 1080 ? '100%' : '350px',
                   maxWidth: windowWidth < 1080 ? '100%' : '450px',
                   backgroundSize: 'cover',
@@ -486,10 +486,10 @@ function App() {
               {/* Main-Panel */}
               <div style={{
                 flex: windowWidth < 1080 ? '0 0 auto' : '1 1 0',
-                height: windowWidth < 1080 ? 300 : 460, // Changed from 350 to 300 for mobile
+                height: windowWidth < 1080 ? 275 : 460, // Changed from 300 to 275 for mobile
                 background: '#D9D9D9',
                 borderRadius: 32,
-                minHeight: windowWidth < 1080 ? '300px' : '460px', // Changed from 350px to 300px for mobile
+                minHeight: windowWidth < 1080 ? '275px' : '460px', // Changed from 300px to 275px for mobile
                 minWidth: windowWidth < 1080 ? '100%' : '1px',
                 width: windowWidth < 1080 ? '100%' : 'auto',
                 padding: windowWidth < 1080 ? '0px' : '0px 20px',
