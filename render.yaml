@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: ai-avatar-backend
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node app.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        fromService:
+          type: web
+          name: ai-avatar-backend
+          property: port
