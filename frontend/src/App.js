@@ -15,7 +15,7 @@ function App() {
   const [isListening, setIsListening] = useState(false);
   const [recognition, setRecognition] = useState(null);
   const [audioEnabled, setAudioEnabled] = useState(false);
-  const [horizontalPadding, setHorizontalPadding] = useState(60);
+  const [horizontalPadding, setHorizontalPadding] = useState(20); // Changed from 60 to 20 for mobile
   const [maxWidth, setMaxWidth] = useState('100%');
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1200);
 
@@ -44,7 +44,7 @@ function App() {
     const screenWidth = typeof window !== 'undefined' ? window.innerWidth : 1200;
     setWindowWidth(screenWidth);
     
-    const fixedPadding = 60;
+    const fixedPadding = 20; // Changed from 60 to 20 for mobile screens
     const maxContentWidth = 1080; // Fixed content width when centered
     
     if (screenWidth < 1080) {
@@ -443,20 +443,20 @@ function App() {
               {/* Avatar-MAIN */}
               <div style={{
                 flex: windowWidth < 1080 ? '0 0 auto' : '0 0 450px',
-                height: windowWidth < 1080 ? 350 : 460,
+                height: windowWidth < 1080 ? 300 : 460, // Changed from 350 to 300 for mobile
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'flex-start',
                 justifyContent: 'center',
                 padding: 0,
                 position: 'relative',
-                minHeight: windowWidth < 1080 ? '300px' : '350px',
+                minHeight: windowWidth < 1080 ? '300px' : '350px', // Keep minHeight at 300px
                 minWidth: windowWidth < 1080 ? '100%' : '330px',
                 width: windowWidth < 1080 ? '100%' : 'auto'
               }}>
                 <div style={{
                   alignSelf: 'stretch',
-                  height: windowWidth < 1080 ? 350 : 460,
+                  height: windowWidth < 1080 ? 300 : 460, // Changed from 350 to 300 for mobile
                   borderRadius: 32,
                   overflow: 'hidden',
                   position: 'relative',
@@ -487,10 +487,10 @@ function App() {
               {/* Main-Panel */}
               <div style={{
                 flex: windowWidth < 1080 ? '0 0 auto' : '1 1 0',
-                height: windowWidth < 1080 ? 350 : 460,
+                height: windowWidth < 1080 ? 300 : 460, // Changed from 350 to 300 for mobile
                 background: '#D9D9D9',
                 borderRadius: 32,
-                minHeight: windowWidth < 1080 ? '350px' : '460px',
+                minHeight: windowWidth < 1080 ? '300px' : '460px', // Changed from 350px to 300px for mobile
                 minWidth: windowWidth < 1080 ? '100%' : '1px',
                 width: windowWidth < 1080 ? '100%' : 'auto',
                 padding: windowWidth < 1080 ? '0px' : '0px 20px',
@@ -700,7 +700,7 @@ function App() {
                   style={{
                     width: '100%',
                     height: '100%',
-                    padding: '0px 60px 0px 20px', // No top/bottom padding needed for input
+                    padding: '0px 20px 0px 20px', // Changed from 60px to 20px for consistent mobile padding
                     border: 'none',
                     borderRadius: 32,
                     fontSize: '16px',
