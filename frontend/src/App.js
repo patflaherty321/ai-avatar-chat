@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Avatar from './Avatar';
 import './App.css';
 
@@ -40,8 +40,14 @@ function App() {
   }, [messages, isLoading]);
 
   // Calculate responsive layout based on screen width
-  const calculateLayout = () => {
+  const calculateLayout = useCallback(() => {
     const screenWidth = typeof window !== 'undefined' ? window.innerWidth : 1200;
+    
+    // Only update if width has changed significantly (prevent micro-adjustments)
+    if (Math.abs(screenWidth - windowWidth) < 5) {
+      return; // Skip update if change is less than 5px
+    }
+    
     setWindowWidth(screenWidth);
     
     const fixedPadding = 20; // Changed from 60 to 20 for mobile screens
@@ -58,10 +64,10 @@ function App() {
       setMaxWidth(`${maxContentWidth}px`);
       console.log(`🖥️ DESKTOP MODE: Width=${screenWidth}px, Padding=${fixedPadding}px, MaxWidth=${maxContentWidth}px, Layout=Horizontal`);
     }
-  };
+  }, [windowWidth]);
 
   // Calculate avatar scale to completely fill the Avatar-MAIN panel
-  const calculateAvatarScale = () => {
+  const calculateAvatarScale = useMemo(() => {
     // Use current window width directly if windowWidth state isn't ready
     const currentWidth = windowWidth || (typeof window !== 'undefined' ? window.innerWidth : 1200);
     
@@ -76,20 +82,28 @@ function App() {
     
     console.log(`🔧 Avatar Scale Calculation (4000px Rive): windowWidth=${windowWidth}, currentWidth=${currentWidth}, scale=${scale}`);
     return scale;
-  };
+  }, [windowWidth]);
 
   // Update layout on mount and window resize
   useEffect(() => {
     // Ensure layout is calculated immediately on mount
     calculateLayout();
     
+    // Throttle resize events to prevent excessive re-renders
+    let resizeTimeout;
     const handleResize = () => {
-      calculateLayout();
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        calculateLayout();
+      }, 100); // Debounce resize events by 100ms
     };
     
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      clearTimeout(resizeTimeout);
+    };
+  }, [calculateLayout]);
 
   const enableAudio = useCallback(async () => {
     try {
@@ -471,14 +485,14 @@ function App() {
                   backgroundRepeat: 'no-repeat'
                 }}>
                   <Avatar
-                    key={`avatar-${calculateAvatarScale()}`} // Force re-render when scale changes
+                    key={`avatar-${calculateAvatarScale}`} // Force re-render when scale changes
                     isActive={true}
                     isTalking={isPlaying}
                     isThinking={isLoading}
                     visemes={visemes}
                     audioUrl={audioUrl}
                     audioEnabled={audioEnabled}
-                    scale={calculateAvatarScale()}
+                    scale={calculateAvatarScale}
                   />
                 </div>
               </div>
