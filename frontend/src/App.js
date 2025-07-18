@@ -67,11 +67,11 @@ function App() {
     
     let scale;
     if (currentWidth >= 1080) {
-      // Desktop: increased scale to eliminate borders and fill frame completely
-      scale = 2.0; // Increased from 1.5 to eliminate borders
+      // Desktop: increased scale to completely eliminate borders
+      scale = 2.5; // Increased from 2.0 to eliminate all borders
     } else if (currentWidth >= 960) {
-      // Tablet/larger mobile: increased scale to eliminate box-like appearance
-      scale = 2.2; // Increased from 2.0 to match mobile scaling
+      // Tablet/larger mobile: increased scale to eliminate borders
+      scale = 2.5; // Increased from 2.2 to eliminate borders in 960-1080px range
     } else {
       // Mobile: scale optimized for 4000x4000px high-res Rive file (looks perfect)
       scale = 2.2; // Keep this - it works perfectly at 959px and below
