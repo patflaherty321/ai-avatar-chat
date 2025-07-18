@@ -1,0 +1,7 @@
+/avatar.riv
+  Content-Type: application/octet-stream
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.riv
+  Content-Type: application/octet-stream
+  Cache-Control: public, max-age=31536000, immutable

@@ -5,12 +5,20 @@
   "installCommand": "cd frontend && npm install",
   "routes": [
     {
+      "src": "/avatar.riv",
+      "headers": { 
+        "cache-control": "s-maxage=31536000,immutable",
+        "content-type": "application/octet-stream"
+      },
+      "dest": "/avatar.riv"
+    },
+    {
       "src": "/static/(.*)",
       "headers": { "cache-control": "s-maxage=31536000,immutable" },
       "dest": "/static/$1"
     },
     {
-      "src": "/(.*\\.(ico|png|jpg|jpeg|gif|svg|webp|js|css|json))$",
+      "src": "/(.*\\.(ico|png|jpg|jpeg|gif|svg|webp|js|css|json|riv))$",
       "dest": "/$1"
     },
     {
