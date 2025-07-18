@@ -2,9 +2,9 @@
   "name": "ai-avatar-chat-backend",
   "version": "1.0.0",
   "description": "AI Avatar Chat - Express.js Backend for Railway deployment",
-  "main": "backend/app.js",
+  "main": "app.js",
   "scripts": {
-    "start": "node backend/app.js",
+    "start": "node app.js",
     "dev": "nodemon backend/app.js",
     "build": "echo 'No build needed for backend'",
     "local-dev": "concurrently \"npm run backend\" \"npm run frontend\"",
