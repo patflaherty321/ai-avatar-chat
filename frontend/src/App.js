@@ -68,13 +68,10 @@ function App() {
     let scale;
     if (currentWidth >= 1080) {
       // Desktop: increased scale to completely eliminate borders
-      scale = 2.5; // Increased from 2.0 to eliminate all borders
-    } else if (currentWidth >= 960) {
-      // Tablet/larger mobile: increased scale to eliminate borders
-      scale = 2.5; // Increased from 2.2 to eliminate borders in 960-1080px range
+      scale = 2.5; // Keep desktop at 2.5x
     } else {
-      // Mobile: scale optimized for 4000x4000px high-res Rive file (looks perfect)
-      scale = 2.2; // Keep this - it works perfectly at 959px and below
+      // Mobile and tablet: unified scale to eliminate jump at 960px and make avatar bigger
+      scale = 3.0; // Increased to 3.0x for all screens under 1080px to eliminate jump and make bigger
     }
     
     console.log(`🔧 Avatar Scale Calculation (4000px Rive): windowWidth=${windowWidth}, currentWidth=${currentWidth}, scale=${scale}`);
