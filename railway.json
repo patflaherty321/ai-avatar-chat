@@ -4,6 +4,6 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "node app.js"
+    "startCommand": "node test-app.js"
   }
 }
