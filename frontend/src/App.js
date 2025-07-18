@@ -71,7 +71,7 @@ function App() {
       scale = 2.5; // Keep desktop at 2.5x
     } else {
       // Mobile and tablet: unified scale to eliminate jump at 960px and make avatar bigger
-      scale = 3.0; // Increased to 3.0x for all screens under 1080px to eliminate jump and make bigger
+      scale = 3.2; // Increased to 3.2x for slightly bigger avatar on all screens under 1080px
     }
     
     console.log(`🔧 Avatar Scale Calculation (4000px Rive): windowWidth=${windowWidth}, currentWidth=${currentWidth}, scale=${scale}`);
