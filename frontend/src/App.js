@@ -67,16 +67,14 @@ function App() {
     
     let scale;
     if (currentWidth >= 1080) {
-      // Desktop: scale to completely fill 450px wide x 460px tall panel
-      // Combined with Avatar component's additional scaling and coverage
-      scale = 3.0; // Works well for desktop
+      // Desktop: scale optimized for 4000x4000px high-res Rive file
+      scale = 1.8; // Reduced from 3.0 for high-resolution Rive file
     } else {
-      // Mobile: scale to completely fill mobile panel dimensions
-      // Mobile needs much larger scaling to fill the full width container
-      scale = 4.5; // Significantly increased from 2.0 for mobile coverage
+      // Mobile: scale optimized for 4000x4000px high-res Rive file
+      scale = 2.2; // Reduced from 4.5 for high-resolution Rive file
     }
     
-    console.log(`🔧 Avatar Scale Calculation: windowWidth=${windowWidth}, currentWidth=${currentWidth}, scale=${scale}`);
+    console.log(`🔧 Avatar Scale Calculation (4000px Rive): windowWidth=${windowWidth}, currentWidth=${currentWidth}, scale=${scale}`);
     return scale;
   };
 

@@ -32,10 +32,18 @@
       "scopes": ["personal", "team"]
     }
   ],
+  "configurableTabs": [
+    {
+      "configurationUrl": "https://ai-avatar-chat-dusky.vercel.app",
+      "scopes": ["team", "groupchat"]
+    }
+  ],
   "permissions": [
     "identity",
     "messageTeamMembers"
   ],
+  "showLoadingIndicator": false,
+  "isFullScreen": false,
   "validDomains": [
     "ai-avatar-chat-dusky.vercel.app"
   ]
