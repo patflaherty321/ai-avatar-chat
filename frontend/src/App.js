@@ -67,8 +67,11 @@ function App() {
     
     let scale;
     if (currentWidth >= 1080) {
-      // Desktop: scale optimized for 4000x4000px high-res Rive file
-      scale = 1.8; // Reduced from 3.0 for high-resolution Rive file
+      // Desktop: reduced scale from 1.8 to 1.5 as requested
+      scale = 1.5; // Reduced from 1.8 for better frame filling
+    } else if (currentWidth >= 960) {
+      // Tablet/larger mobile: new breakpoint for 960-1080px range
+      scale = 1.7; // Fill frame better in this range
     } else {
       // Mobile: scale optimized for 4000x4000px high-res Rive file
       scale = 2.2; // Reduced from 4.5 for high-resolution Rive file
