@@ -25,29 +25,40 @@ console.log(`📡 Server will run on ${HOST}:${PORT}`);
 const audioDir = path.join(__dirname, 'audio');
 fs.ensureDirSync(audioDir);
 
-// Middleware
-app.use(cors({
-  origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if(!origin) return callback(null, true);
-    
-    // Define allowed origins
+// CORS configuration - UPDATED with all Vercel URLs
+const corsOptions = {
+  origin: function (origin, callback) {
     const allowedOrigins = [
       'http://localhost:3000',
       'http://localhost:3002',
-      'https://ai-avatar-chat-dusky.vercel.app', // Vercel frontend
+      'https://ai-avatar-chat-dusky.vercel.app',
+      'https://ai-avatar-chat-k3y3ek3st-patflaherty321s-projects.vercel.app',
+      'https://ai-avatar-chat-77fsx4op6-patflaherty321s-projects.vercel.app',
+      'https://ai-avatar-chat-fsjkb9ye1-patflaherty321s-projects.vercel.app',
       process.env.FRONTEND_URL
-    ].filter(Boolean); // Filter out undefined values
+    ].filter(Boolean);
     
-    if(allowedOrigins.indexOf(origin) !== -1 || !origin) {
+    // Check if origin matches any allowed origin or use regex for all Vercel preview deployments
+    const isAllowed = !origin || allowedOrigins.some(allowed => allowed === origin) || 
+                     /https:\/\/ai-avatar-chat-.*\.vercel\.app$/.test(origin);
+    
+    if (isAllowed) {
       callback(null, true);
     } else {
-      console.log('Blocked CORS for:', origin);
+      console.warn('CORS blocked origin:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true
-}));
+  credentials: true,
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  maxAge: 86400 // 24 hours
+};
+
+app.use(cors(corsOptions));
+
+// Add explicit OPTIONS handler for preflight requests
+app.options('*', cors(corsOptions));
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
