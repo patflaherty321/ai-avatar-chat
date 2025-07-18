@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useRive, useStateMachineInput } from '@rive-app/react-canvas';
 
 function Avatar({ 
@@ -196,7 +196,7 @@ function Avatar({
         visemeInput.value = 0;
       }
     };
-  }, [audioUrl, visemes, visemeInput]); // Removed isTalking from dependencies to prevent re-triggering
+  }, [audioUrl, visemes, visemeInput, isTalking]); // Include isTalking in dependencies
 
   return (
     <div style={{
