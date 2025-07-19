@@ -109,58 +109,91 @@ function App() {
     try {
       console.log('🔊 Attempting to enable audio...');
       
-      // Add timeout to prevent hanging
+      // Mobile-specific audio enablement with more aggressive approach
       const audioPromise = new Promise(async (resolve, reject) => {
         try {
-          // Create a dummy audio context to enable audio permissions
-          const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-          await audioContext.resume();
+          // Create audio context with mobile compatibility
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          if (AudioContextClass) {
+            const audioContext = new AudioContextClass();
+            if (audioContext.state === 'suspended') {
+              await audioContext.resume();
+              console.log('🔊 Audio context resumed');
+            }
+          }
           
-          // Create and play a silent audio to unlock autoplay
-          const audio = new Audio();
-          audio.src = 'data:audio/wav;base64,UklGRnoAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
-          audio.volume = 0.01; // Very low volume
+          // Create and play multiple silent audio attempts for mobile compatibility
+          const audio1 = new Audio();
+          const audio2 = new Audio();
           
-          // Add event listeners to handle play result
-          audio.oncanplaythrough = () => {
-            audio.play().then(() => {
-              resolve(true);
-            }).catch((error) => {
-              console.warn('🔇 Silent audio play failed:', error);
-              resolve(false); // Don't reject, just continue
-            });
+          // Try different audio sources for maximum compatibility
+          audio1.src = 'data:audio/wav;base64,UklGRnoAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
+          audio2.src = 'data:audio/mpeg;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsuY29tIC8gTGFTb25vdGhlcXVlLm9yZwBURU5DAAAAHQAAATNTAG1wM1BST1YuNi4xLjEgKGNkYzIwMTEwKVRTU0UAAAAHAAABAEZ4Q0FQAAAAHQAAAQRFQVNUX0VYVEVOREVEXwhNUElNUVBNUUJFX0NQRU5DAAAA=';
+          
+          audio1.volume = 0.01;
+          audio2.volume = 0.01;
+          
+          // Mobile requires multiple attempts and different events
+          let resolved = false;
+          
+          const resolveOnce = (success) => {
+            if (!resolved) {
+              resolved = true;
+              resolve(success);
+            }
           };
           
-          audio.onerror = () => {
-            console.warn('🔇 Silent audio load failed');
-            resolve(false); // Don't reject, just continue
+          // Try playing multiple audio sources
+          const tryPlay = async (audio, label) => {
+            try {
+              audio.load(); // Force load on mobile
+              await audio.play();
+              console.log(`🔊 ${label} audio play succeeded`);
+              resolveOnce(true);
+            } catch (error) {
+              console.warn(`🔇 ${label} audio play failed:`, error);
+            }
           };
           
-          // Fallback timeout
+          // Set up event listeners for both audio elements
+          audio1.oncanplaythrough = () => tryPlay(audio1, 'Primary');
+          audio2.oncanplaythrough = () => tryPlay(audio2, 'Secondary');
+          
+          audio1.onerror = () => console.warn('🔇 Primary audio load failed');
+          audio2.onerror = () => console.warn('🔇 Secondary audio load failed');
+          
+          // Also try immediate play without waiting for canplaythrough
           setTimeout(() => {
-            resolve(false);
-          }, 1000);
+            tryPlay(audio1, 'Primary-Immediate');
+            tryPlay(audio2, 'Secondary-Immediate');
+          }, 100);
+          
+          // Fallback timeout - consider it enabled even if silent play fails
+          setTimeout(() => {
+            console.log('🔊 Audio enablement timeout - continuing anyway for mobile compatibility');
+            resolveOnce(true);
+          }, 1500);
           
         } catch (error) {
           reject(error);
         }
       });
       
-      // Timeout the entire operation
+      // Shorter timeout for mobile responsiveness
       const timeoutPromise = new Promise((resolve) => {
         setTimeout(() => {
-          console.warn('⏰ Audio enablement timed out');
-          resolve(false);
+          console.warn('⏰ Audio enablement timed out - enabling anyway for mobile');
+          resolve(true);
         }, 2000);
       });
       
       await Promise.race([audioPromise, timeoutPromise]);
       
-      setAudioEnabled(true); // Always enable audio - the test might fail but actual playback could work
-      console.log('✅ Audio enabled (test may have failed but continuing anyway)');
+      setAudioEnabled(true);
+      console.log('✅ Audio enabled for mobile compatibility');
     } catch (error) {
       console.warn('❌ Could not enable audio:', error);
-      setAudioEnabled(true); // Set to true anyway to allow the app to continue
+      setAudioEnabled(true); // Always enable for mobile compatibility
     }
   }, []);
 
@@ -176,14 +209,22 @@ function App() {
     try {
       console.log('🚀 Sending message to API:', messageText);
       const backendUrl = process.env.REACT_APP_BACKEND_URL || 'https://ai-avatar-chat-backend.onrender.com';
+      
+      // Always request audio if user has interacted with the app (mobile fix)
+      const requestBody = {
+        message: messageText,
+        includeAudio: audioEnabled || true, // Force audio request for mobile compatibility
+        userAgent: navigator.userAgent // Send user agent for mobile detection
+      };
+      
+      console.log('📤 Request body:', requestBody);
+      
       const response = await fetch(`${backendUrl}/api/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          message: messageText
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       console.log('📡 Response status:', response.status, response.statusText);
@@ -372,14 +413,16 @@ function App() {
       return;
     }
 
-    // Enable audio on user interaction (immediately, don't wait)
-    if (!audioEnabled) {
-      console.log('🔊 First microphone interaction - enabling audio immediately...');
-      setAudioEnabled(true); // Set immediately for faster response
-      enableAudio().catch(error => {
-        console.warn('🔇 Audio enabling failed but continuing:', error);
-      });
-    }
+    // Force enable audio on microphone interaction (critical for mobile)
+    console.log('🔊 Microphone interaction - force enabling audio for mobile...');
+    setAudioEnabled(true); // Set immediately
+    
+    // Force audio enablement in the background without waiting
+    enableAudio().then(() => {
+      console.log('✅ Audio enablement completed during microphone interaction');
+    }).catch(error => {
+      console.warn('🔇 Audio enabling failed but continuing (mobile compatibility):', error);
+    });
 
     if (isListening) {
       // Stop listening
@@ -390,7 +433,7 @@ function App() {
     } else {
       // Start listening
       try {
-        console.log('🎤 Starting speech recognition');
+        console.log('🎤 Starting speech recognition for mobile device');
         recognition.start();
         setIsMicActive(true);
       } catch (error) {
@@ -399,7 +442,7 @@ function App() {
         setIsMicActive(false);
       }
     }
-  }, [recognition, audioEnabled, enableAudio, isListening]);
+  }, [recognition, enableAudio, isListening]);
 
   return (
     <div className="App">
