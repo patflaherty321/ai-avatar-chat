@@ -175,7 +175,7 @@ function App() {
 
     try {
       console.log('🚀 Sending message to API:', messageText);
-      const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:3006';
+      const backendUrl = process.env.REACT_APP_BACKEND_URL || 'https://ai-avatar-chat-backend.onrender.com';
       const response = await fetch(`${backendUrl}/api/chat`, {
         method: 'POST',
         headers: {
@@ -219,7 +219,7 @@ function App() {
           console.log('🎵 Viseme data count:', data.visemes?.length || 0);
           
           // Create full audio URL from relative path
-          const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:3006';
+          const backendUrl = process.env.REACT_APP_BACKEND_URL || 'https://ai-avatar-chat-backend.onrender.com';
           const fullAudioUrl = `${backendUrl}${data.audioUrl}`;
           
           // Convert viseme format to the format expected by Avatar component
