@@ -14,6 +14,7 @@ function Avatar({
   const audioRef = useRef(null);
   const visemeTimersRef = useRef([]);
   const lastAudioKeyRef = useRef(null); // Track the last played audio to prevent duplicates
+  const [internalTalking, setInternalTalking] = useState(false); // Internal talking state controlled by audio
 
   // Remove dynamic scaling - keep avatar at consistent 170% scale
   // const calculateScale = () => {
@@ -36,7 +37,7 @@ function Avatar({
   const visemeInput = useStateMachineInput(rive, 'State Machine 1', 'numViseme');
   const speakingInput = useStateMachineInput(rive, 'State Machine 1', 'IsSpeaking');
 
-  console.log('[RIVE AVATAR] *** REAL-TIME SYNC v5.3 *** Component rendered with props:', { 
+  console.log('[RIVE AVATAR] *** REAL-TIME SYNC v5.4 *** Component rendered with props:', { 
     isActive, 
     isTalking, 
     isThinking, 
@@ -65,13 +66,13 @@ function Avatar({
     }
   }, [visemeInput, speakingInput]);
 
-  // Control speaking state
+  // Control speaking state based on internal audio-driven state
   useEffect(() => {
     if (speakingInput) {
-      speakingInput.value = isTalking;
-      console.log('[RIVE AVATAR] Set IsSpeaking to:', isTalking);
+      speakingInput.value = internalTalking;
+      console.log('[RIVE AVATAR] Set IsSpeaking to:', internalTalking, '(internal state)');
     }
-  }, [isTalking, speakingInput]);
+  }, [internalTalking, speakingInput]);
 
   // Handle synchronized audio and viseme animation
   useEffect(() => {
@@ -87,8 +88,9 @@ function Avatar({
         audioRef.current.currentTime = 0;
         audioRef.current = null;
       }
-      // Reset to neutral when not talking
-      if (visemeInput && !isTalking) {
+      // Reset to neutral and stop talking when no audio
+      setInternalTalking(false);
+      if (visemeInput) {
         visemeInput.value = 0;
       }
       return;
@@ -110,7 +112,7 @@ function Avatar({
 
     // Mark this audio as being played
     lastAudioKeyRef.current = audioKey;
-    console.log('[RIVE AVATAR] *** REAL-TIME SYNC v5.3 *** Starting synchronized audio + lip sync with', visemes.length, 'visemes for key:', audioKey);
+    console.log('[RIVE AVATAR] *** REAL-TIME SYNC v5.4 *** Starting synchronized audio + lip sync with', visemes.length, 'visemes for key:', audioKey);
     
     // Create audio element
     const audio = new Audio();
@@ -122,6 +124,9 @@ function Avatar({
     // Setup audio event listeners
     audio.addEventListener('ended', () => {
       console.log('[RIVE AVATAR] Audio playback ended for key:', audioKey);
+      // Stop talking when audio actually ends
+      setInternalTalking(false);
+      console.log('[RIVE AVATAR] Internal talking state set to: false (audio ended)');
       // Clear the audio key when playback completes
       if (lastAudioKeyRef.current === audioKey) {
         lastAudioKeyRef.current = null;
@@ -130,6 +135,8 @@ function Avatar({
     
     audio.addEventListener('error', (e) => {
       console.error('[RIVE AVATAR] Audio error:', e);
+      // Stop talking on error
+      setInternalTalking(false);
     });
 
     // Coordinate audio and viseme start with REAL-TIME SYNC
@@ -139,12 +146,16 @@ function Avatar({
         const lastViseme = visemes[visemes.length - 1];
         const lastVisemeTime = lastViseme ? (lastViseme.timeMs || 0) : 0;
         
-        console.log('[RIVE AVATAR] *** REAL-TIME SYNC v5.3 *** Starting audio + viseme synchronization');
+        console.log('[RIVE AVATAR] *** REAL-TIME SYNC v5.4 *** Starting audio + viseme synchronization');
         console.log('[RIVE AVATAR] Viseme timing: last viseme at', lastVisemeTime, 'ms, total visemes:', visemes.length);
         
         // Start audio first
         await audio.play();
         console.log('[RIVE AVATAR] Audio started successfully - duration:', Math.round(audio.duration * 1000), 'ms');
+        
+        // Set internal talking state to true when audio starts
+        setInternalTalking(true);
+        console.log('[RIVE AVATAR] Internal talking state set to: true (audio started)');
         
         // Use real-time sync instead of pre-scheduling
         const syncVisemesToAudio = () => {
@@ -229,7 +240,7 @@ function Avatar({
         visemeInput.value = 0;
       }
     };
-  }, [audioUrl, visemes, visemeInput, isTalking]); // Removed isTalking from dependencies to prevent re-triggering
+  }, [audioUrl, visemes, visemeInput]); // Audio-driven sync - no external dependencies
 
   return (
     <div style={{
