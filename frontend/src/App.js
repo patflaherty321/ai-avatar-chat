@@ -76,8 +76,8 @@ function App() {
       // Desktop: increased scale to completely eliminate borders
       scale = 2.5; // Keep desktop at 2.5x
     } else {
-      // Mobile and tablet: unified scale to eliminate jump at 960px and make avatar bigger
-      scale = 3.2; // Increased to 3.2x for slightly bigger avatar on all screens under 1080px
+      // Mobile and tablet: increased scale to 3.5x to eliminate remaining borders
+      scale = 3.5; // Increased to 3.5x to eliminate any remaining borders
     }
     
     console.log(`🔧 Avatar Scale Calculation (4000px Rive): windowWidth=${windowWidth}, currentWidth=${currentWidth}, scale=${scale}`);
@@ -425,7 +425,7 @@ function App() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          paddingTop: '20px' // Add top padding for spacing
+          paddingTop: '0px' // Removed extra top padding for tighter layout
         }}>
           <div style={{
             display: 'flex',
@@ -602,7 +602,7 @@ function App() {
           width: '100%',
           position: 'relative',
           flexShrink: 0,
-          marginTop: '20px' // Changed from 'auto' to fixed 20px spacing from panels above
+          marginTop: '0px' // Removed extra 20px spacing for tighter layout
         }}>
           <div style={{
             display: 'flex',
