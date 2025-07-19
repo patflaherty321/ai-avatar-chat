@@ -36,7 +36,7 @@ function Avatar({
   const visemeInput = useStateMachineInput(rive, 'State Machine 1', 'numViseme');
   const speakingInput = useStateMachineInput(rive, 'State Machine 1', 'IsSpeaking');
 
-  console.log('[RIVE AVATAR] *** REAL-TIME SYNC v5.2 *** Component rendered with props:', { 
+  console.log('[RIVE AVATAR] *** REAL-TIME SYNC v5.3 *** Component rendered with props:', { 
     isActive, 
     isTalking, 
     isThinking, 
@@ -110,7 +110,7 @@ function Avatar({
 
     // Mark this audio as being played
     lastAudioKeyRef.current = audioKey;
-    console.log('[RIVE AVATAR] *** REAL-TIME SYNC v5.2 *** Starting synchronized audio + lip sync with', visemes.length, 'visemes for key:', audioKey);
+    console.log('[RIVE AVATAR] *** REAL-TIME SYNC v5.3 *** Starting synchronized audio + lip sync with', visemes.length, 'visemes for key:', audioKey);
     
     // Create audio element
     const audio = new Audio();
@@ -135,11 +135,16 @@ function Avatar({
     // Coordinate audio and viseme start with REAL-TIME SYNC
     const startSynchronizedPlayback = async () => {
       try {
-        console.log('[RIVE AVATAR] *** REAL-TIME SYNC v5.2 *** Starting audio + viseme synchronization');
+        // Get audio duration and viseme timing info for debugging
+        const lastViseme = visemes[visemes.length - 1];
+        const lastVisemeTime = lastViseme ? (lastViseme.timeMs || 0) : 0;
+        
+        console.log('[RIVE AVATAR] *** REAL-TIME SYNC v5.3 *** Starting audio + viseme synchronization');
+        console.log('[RIVE AVATAR] Viseme timing: last viseme at', lastVisemeTime, 'ms, total visemes:', visemes.length);
         
         // Start audio first
         await audio.play();
-        console.log('[RIVE AVATAR] Audio started successfully');
+        console.log('[RIVE AVATAR] Audio started successfully - duration:', Math.round(audio.duration * 1000), 'ms');
         
         // Use real-time sync instead of pre-scheduling
         const syncVisemesToAudio = () => {
@@ -149,13 +154,21 @@ function Avatar({
           
           // Find the current viseme based on audio time
           let currentViseme = null;
+          let lastViseme = null;
+          
           for (const viseme of visemes) {
             const visemeTimeMs = viseme.timeMs || 0;
             if (currentTimeMs >= visemeTimeMs) {
               currentViseme = viseme;
+              lastViseme = viseme; // Keep track of the last viseme we've seen
             } else {
               break; // Visemes should be in chronological order
             }
+          }
+          
+          // If we're past all visemes but audio is still playing, use the last viseme
+          if (!currentViseme && lastViseme && visemes.length > 0) {
+            currentViseme = lastViseme;
           }
           
           if (currentViseme) {
@@ -167,6 +180,14 @@ function Avatar({
               visemeInput.value = expectedViseme;
               console.log(`[RIVE AVATAR] Real-time sync: viseme ${expectedViseme} at ${Math.round(currentTimeMs)}ms`);
             }
+          } else {
+            // Only reset to neutral if no visemes found and we're early in the audio
+            if (currentTimeMs < 100) { // Only reset if we're in the first 100ms
+              if (visemeInput.value !== 0) {
+                visemeInput.value = 0;
+                console.log(`[RIVE AVATAR] Real-time sync: reset to neutral at ${Math.round(currentTimeMs)}ms`);
+              }
+            }
           }
           
           // Continue syncing if audio is still playing
@@ -177,7 +198,7 @@ function Avatar({
             if (visemeInput) {
               visemeInput.value = 0;
             }
-            console.log('[RIVE AVATAR] Real-time sync completed');
+            console.log('[RIVE AVATAR] Real-time sync completed - audio duration:', Math.round(audio.duration * 1000), 'ms');
           }
         };
         
