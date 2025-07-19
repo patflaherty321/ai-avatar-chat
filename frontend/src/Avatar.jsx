@@ -13,6 +13,7 @@ function Avatar({
   
   const audioRef = useRef(null);
   const visemeTimersRef = useRef([]);
+  const lastAudioKeyRef = useRef(null); // Track the last played audio to prevent duplicates
 
   // Remove dynamic scaling - keep avatar at consistent 170% scale
   // const calculateScale = () => {
@@ -35,7 +36,7 @@ function Avatar({
   const visemeInput = useStateMachineInput(rive, 'State Machine 1', 'numViseme');
   const speakingInput = useStateMachineInput(rive, 'State Machine 1', 'IsSpeaking');
 
-  console.log('[RIVE AVATAR] *** REAL-TIME SYNC v5.1 *** Component rendered with props:', { 
+  console.log('[RIVE AVATAR] *** REAL-TIME SYNC v5.2 *** Component rendered with props:', { 
     isActive, 
     isTalking, 
     isThinking, 
@@ -78,15 +79,14 @@ function Avatar({
     visemeTimersRef.current.forEach(clearTimeout);
     visemeTimersRef.current = [];
     
-    // Cleanup previous audio
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-      audioRef.current = null;
-    }
-
-    // Only start if we have all required data and haven't played this audio yet
+    // Only start if we have all required data
     if (!audioUrl || !visemeInput || !visemes || visemes.length === 0) {
+      // Cleanup previous audio if no new audio to play
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        audioRef.current = null;
+      }
       // Reset to neutral when not talking
       if (visemeInput && !isTalking) {
         visemeInput.value = 0;
@@ -96,24 +96,36 @@ function Avatar({
 
     // Prevent duplicate playback by checking if this is the same audio
     const audioKey = `${audioUrl}_${visemes.length}`;
-    if (audioRef.current?.dataset?.audioKey === audioKey) {
-      console.log('[RIVE AVATAR] Skipping duplicate audio:', audioKey);
+    if (lastAudioKeyRef.current === audioKey) {
+      console.log('[RIVE AVATAR] 🚫 Skipping duplicate audio:', audioKey);
       return;
     }
 
-    console.log('[RIVE AVATAR] *** REAL-TIME SYNC v5.0 *** Starting synchronized audio + lip sync with', visemes.length, 'visemes');
+    // Cleanup previous audio before starting new one
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current = null;
+    }
+
+    // Mark this audio as being played
+    lastAudioKeyRef.current = audioKey;
+    console.log('[RIVE AVATAR] *** REAL-TIME SYNC v5.2 *** Starting synchronized audio + lip sync with', visemes.length, 'visemes for key:', audioKey);
     
     // Create audio element
     const audio = new Audio();
     const fullAudioUrl = audioUrl.startsWith('http') ? audioUrl : `http://localhost:3006${audioUrl}`;
     audio.src = fullAudioUrl;
     audio.volume = 1.0;
-    audio.dataset.audioKey = audioKey; // Mark this audio to prevent duplicates
     audioRef.current = audio;
 
     // Setup audio event listeners
     audio.addEventListener('ended', () => {
-      console.log('[RIVE AVATAR] Audio playback ended');
+      console.log('[RIVE AVATAR] Audio playback ended for key:', audioKey);
+      // Clear the audio key when playback completes
+      if (lastAudioKeyRef.current === audioKey) {
+        lastAudioKeyRef.current = null;
+      }
     });
     
     audio.addEventListener('error', (e) => {
@@ -123,7 +135,7 @@ function Avatar({
     // Coordinate audio and viseme start with REAL-TIME SYNC
     const startSynchronizedPlayback = async () => {
       try {
-        console.log('[RIVE AVATAR] *** REAL-TIME SYNC v5.1 *** Starting audio + viseme synchronization');
+        console.log('[RIVE AVATAR] *** REAL-TIME SYNC v5.2 *** Starting audio + viseme synchronization');
         
         // Start audio first
         await audio.play();
