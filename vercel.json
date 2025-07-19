@@ -9,7 +9,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "frame-ancestors https://teams.microsoft.com *.teams.microsoft.com https://*.teams.microsoft.com;"
+          "value": "frame-ancestors https://teams.microsoft.com *.teams.microsoft.com https://*.teams.microsoft.com https://www.iamp.at *.iamp.at;"
         },
         {
           "key": "X-Frame-Options",
