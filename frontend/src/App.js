@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Avatar from './Avatar';
 import './App.css';
+import * as microsoftTeams from '@microsoft/teams-js';
 
 function App() {
   const [messages, setMessages] = useState([
@@ -18,6 +19,8 @@ function App() {
   const [horizontalPadding, setHorizontalPadding] = useState(20); // Changed from 60 to 20 for mobile
   const [maxWidth, setMaxWidth] = useState('100%');
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1200);
+  const [isInTeams, setIsInTeams] = useState(false);
+  const [isTeamsInitialized, setIsTeamsInitialized] = useState(false);
 
   // Ref for auto-scrolling chat messages
   const messagesEndRef = useRef(null);
@@ -76,8 +79,8 @@ function App() {
       // Desktop: increased scale to completely eliminate borders
       scale = 2.5; // Keep desktop at 2.5x
     } else {
-      // Mobile and tablet: unified scale to eliminate jump at 960px and make avatar bigger
-      scale = 3.2; // Increased to 3.2x for slightly bigger avatar on all screens under 1080px
+      // Mobile and tablet: increased scale to 3.5x to eliminate remaining borders
+      scale = 3.5; // Increased to 3.5x to eliminate any remaining borders
     }
     
     console.log(`🔧 Avatar Scale Calculation (4000px Rive): windowWidth=${windowWidth}, currentWidth=${currentWidth}, scale=${scale}`);
@@ -105,62 +108,128 @@ function App() {
     };
   }, [calculateLayout]);
 
+  // Initialize Microsoft Teams SDK
+  useEffect(() => {
+    const initializeTeams = async () => {
+      try {
+        // Detect if we're running in Teams
+        const inTeams = window.name === 'embedded-page-container' || 
+                       window.navigator.userAgent.includes('Teams') ||
+                       window.location.href.includes('teams.microsoft.com');
+        
+        setIsInTeams(inTeams);
+        
+        if (inTeams) {
+          console.log('🔵 Initializing Teams SDK...');
+          
+          // Initialize the Teams SDK
+          await microsoftTeams.app.initialize();
+          
+          // Check if we can request permissions
+          const context = await microsoftTeams.app.getContext();
+          console.log('📋 Teams context:', context);
+          
+          setIsTeamsInitialized(true);
+          console.log('✅ Teams SDK initialized successfully');
+        }
+      } catch (error) {
+        console.error('❌ Teams initialization failed:', error);
+        setIsTeamsInitialized(false);
+      }
+    };
+
+    initializeTeams();
+  }, []);
+
   const enableAudio = useCallback(async () => {
     try {
       console.log('🔊 Attempting to enable audio...');
       
-      // Add timeout to prevent hanging
+      // Mobile-specific audio enablement with more aggressive approach
       const audioPromise = new Promise(async (resolve, reject) => {
         try {
-          // Create a dummy audio context to enable audio permissions
-          const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-          await audioContext.resume();
+          // Create audio context with mobile compatibility
+          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+          if (AudioContextClass) {
+            const audioContext = new AudioContextClass();
+            if (audioContext.state === 'suspended') {
+              await audioContext.resume();
+              console.log('🔊 Audio context resumed');
+            }
+          }
           
-          // Create and play a silent audio to unlock autoplay
-          const audio = new Audio();
-          audio.src = 'data:audio/wav;base64,UklGRnoAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
-          audio.volume = 0.01; // Very low volume
+          // Create and play multiple silent audio attempts for mobile compatibility
+          const audio1 = new Audio();
+          const audio2 = new Audio();
           
-          // Add event listeners to handle play result
-          audio.oncanplaythrough = () => {
-            audio.play().then(() => {
-              resolve(true);
-            }).catch((error) => {
-              console.warn('🔇 Silent audio play failed:', error);
-              resolve(false); // Don't reject, just continue
-            });
+          // Try different audio sources for maximum compatibility
+          audio1.src = 'data:audio/wav;base64,UklGRnoAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
+          audio2.src = 'data:audio/mpeg;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsuY29tIC8gTGFTb25vdGhlcXVlLm9yZwBURU5DAAAAHQAAATNTAG1wM1BST1YuNi4xLjEgKGNkYzIwMTEwKVRTU0UAAAAHAAABAEZ4Q0FQAAAAHQAAAQRFQVNUX0VYVEVOREVEXwhNUElNUVBNUUJFX0NQRU5DAAAA=';
+          
+          audio1.volume = 0.01;
+          audio2.volume = 0.01;
+          
+          // Mobile requires multiple attempts and different events
+          let resolved = false;
+          
+          const resolveOnce = (success) => {
+            if (!resolved) {
+              resolved = true;
+              resolve(success);
+            }
           };
           
-          audio.onerror = () => {
-            console.warn('🔇 Silent audio load failed');
-            resolve(false); // Don't reject, just continue
+          // Try playing multiple audio sources
+          const tryPlay = async (audio, label) => {
+            try {
+              audio.load(); // Force load on mobile
+              await audio.play();
+              console.log(`🔊 ${label} audio play succeeded`);
+              resolveOnce(true);
+            } catch (error) {
+              console.warn(`🔇 ${label} audio play failed:`, error);
+            }
           };
           
-          // Fallback timeout
+          // Set up event listeners for both audio elements
+          audio1.oncanplaythrough = () => tryPlay(audio1, 'Primary');
+          audio2.oncanplaythrough = () => tryPlay(audio2, 'Secondary');
+          
+          audio1.onerror = () => console.warn('🔇 Primary audio load failed');
+          audio2.onerror = () => console.warn('🔇 Secondary audio load failed');
+          
+          // Also try immediate play without waiting for canplaythrough
           setTimeout(() => {
-            resolve(false);
-          }, 1000);
+            tryPlay(audio1, 'Primary-Immediate');
+            tryPlay(audio2, 'Secondary-Immediate');
+          }, 100);
+          
+          // Fallback timeout - consider it enabled even if silent play fails
+          setTimeout(() => {
+            console.log('🔊 Audio enablement timeout - continuing anyway for mobile compatibility');
+            resolveOnce(true);
+          }, 1500);
           
         } catch (error) {
           reject(error);
         }
       });
       
-      // Timeout the entire operation
+      // Shorter timeout for mobile responsiveness
       const timeoutPromise = new Promise((resolve) => {
         setTimeout(() => {
-          console.warn('⏰ Audio enablement timed out');
-          resolve(false);
+          console.warn('⏰ Audio enablement timed out - enabling anyway for mobile');
+          resolve(true);
         }, 2000);
       });
       
       await Promise.race([audioPromise, timeoutPromise]);
       
-      setAudioEnabled(true); // Always enable audio - the test might fail but actual playback could work
-      console.log('✅ Audio enabled (test may have failed but continuing anyway)');
+      setAudioEnabled(true);
+      console.log('✅ Audio enabled for mobile compatibility');
     } catch (error) {
       console.warn('❌ Could not enable audio:', error);
-      setAudioEnabled(true); // Set to true anyway to allow the app to continue
+      setAudioEnabled(true); // Always enable for mobile compatibility
     }
   }, []);
 
@@ -176,14 +245,22 @@ function App() {
     try {
       console.log('🚀 Sending message to API:', messageText);
       const backendUrl = process.env.REACT_APP_BACKEND_URL || 'https://ai-avatar-chat-backend.onrender.com';
+      
+      // Always request audio if user has interacted with the app (mobile fix)
+      const requestBody = {
+        message: messageText,
+        includeAudio: audioEnabled || true, // Force audio request for mobile compatibility
+        userAgent: navigator.userAgent // Send user agent for mobile detection
+      };
+      
+      console.log('📤 Request body:', requestBody);
+      
       const response = await fetch(`${backendUrl}/api/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          message: messageText
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       console.log('📡 Response status:', response.status, response.statusText);
@@ -366,20 +443,26 @@ function App() {
   }, [sendMessage]);
 
   const toggleMicrophone = useCallback(async () => {
-    console.log('🎤 toggleMicrophone called, recognition available:', !!recognition);
+    console.log('🎤 toggleMicrophone called, recognition available:', !!recognition, 'Teams initialized:', isTeamsInitialized);
+    
     if (!recognition) {
-      alert('Speech recognition is not supported in this browser. Please use Chrome, Safari, or Edge.');
+      const errorMsg = isInTeams 
+        ? 'Speech recognition requires additional permissions in Teams. Please allow microphone access when prompted.'
+        : 'Speech recognition is not supported in this browser. Please use Chrome, Safari, or Edge.';
+      alert(errorMsg);
       return;
     }
 
-    // Enable audio on user interaction (immediately, don't wait)
-    if (!audioEnabled) {
-      console.log('🔊 First microphone interaction - enabling audio immediately...');
-      setAudioEnabled(true); // Set immediately for faster response
-      enableAudio().catch(error => {
-        console.warn('🔇 Audio enabling failed but continuing:', error);
-      });
-    }
+    // Force enable audio on microphone interaction (critical for mobile and Teams)
+    console.log('🔊 Microphone interaction - force enabling audio for Teams/mobile...');
+    setAudioEnabled(true); // Set immediately
+    
+    // Force audio enablement in the background without waiting
+    enableAudio().then(() => {
+      console.log('✅ Audio enablement completed during microphone interaction');
+    }).catch(error => {
+      console.warn('🔇 Audio enabling failed but continuing (Teams/mobile compatibility):', error);
+    });
 
     if (isListening) {
       // Stop listening
@@ -388,18 +471,48 @@ function App() {
       setIsListening(false);
       setIsMicActive(false);
     } else {
-      // Start listening
+      // Start listening with Teams-specific handling
       try {
-        console.log('🎤 Starting speech recognition');
+        console.log('🎤 Starting speech recognition for Teams environment');
+        
+        // Request microphone permission with Teams SDK if available
+        if (isInTeams && isTeamsInitialized) {
+          try {
+            console.log('🔵 Running in Teams environment - using browser permissions API...');
+            // In Teams apps, we rely on the device permissions in the manifest and browser APIs
+            // The Teams SDK doesn't have a direct permissions API for microphone
+          } catch (teamsPermError) {
+            console.warn('⚠️ Teams permission handling:', teamsPermError);
+          }
+        }
+        
+        // Request microphone permission explicitly for Teams/browsers
+        if (navigator.permissions) {
+          try {
+            const permissionStatus = await navigator.permissions.query({ name: 'microphone' });
+            console.log('🎤 Microphone permission status:', permissionStatus.state);
+            
+            if (permissionStatus.state === 'denied') {
+              alert('Microphone access is required. Please enable microphone permissions in your browser settings and reload the page.');
+              return;
+            }
+          } catch (permError) {
+            console.warn('🎤 Could not check microphone permissions:', permError);
+          }
+        }
+        
         recognition.start();
         setIsMicActive(true);
       } catch (error) {
         console.error('❌ Error starting speech recognition:', error);
-        alert('Error starting microphone. Please check your microphone permissions.');
+        const errorMsg = isInTeams 
+          ? 'Error starting microphone in Teams. Please ensure microphone permissions are granted and try again.'
+          : 'Error starting microphone. Please check your microphone permissions.';
+        alert(errorMsg);
         setIsMicActive(false);
       }
     }
-  }, [recognition, audioEnabled, enableAudio, isListening]);
+  }, [recognition, enableAudio, isListening, isInTeams, isTeamsInitialized]);
 
   return (
     <div className="App">
@@ -425,7 +538,7 @@ function App() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          paddingTop: '20px' // Add top padding for spacing
+          paddingTop: '0px' // Removed extra top padding for tighter layout
         }}>
           <div style={{
             display: 'flex',
@@ -602,7 +715,7 @@ function App() {
           width: '100%',
           position: 'relative',
           flexShrink: 0,
-          marginTop: '20px' // Changed from 'auto' to fixed 20px spacing from panels above
+          marginTop: '0px' // Removed extra 20px spacing for tighter layout
         }}>
           <div style={{
             display: 'flex',
