@@ -14,6 +14,14 @@
         {
           "key": "X-Frame-Options",
           "value": "ALLOWALL"
+        },
+        {
+          "key": "Feature-Policy",
+          "value": "microphone 'self' https://teams.microsoft.com *.teams.microsoft.com; camera 'self' https://teams.microsoft.com *.teams.microsoft.com; autoplay 'self'"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "microphone=(self \"https://teams.microsoft.com\" \"https://*.teams.microsoft.com\"), camera=(self \"https://teams.microsoft.com\" \"https://*.teams.microsoft.com\"), autoplay=(self)"
         }
       ]
     }

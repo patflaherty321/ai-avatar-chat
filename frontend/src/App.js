@@ -408,20 +408,31 @@ function App() {
 
   const toggleMicrophone = useCallback(async () => {
     console.log('🎤 toggleMicrophone called, recognition available:', !!recognition);
+    
+    // Detect if running in Teams
+    const isInTeams = window.location.href.includes('teams.microsoft.com') || 
+                     window.parent !== window || 
+                     document.referrer.includes('teams.microsoft.com');
+    
+    console.log('🏢 Teams detection:', { isInTeams, href: window.location.href, inFrame: window.parent !== window });
+    
     if (!recognition) {
-      alert('Speech recognition is not supported in this browser. Please use Chrome, Safari, or Edge.');
+      const errorMsg = isInTeams 
+        ? 'Speech recognition requires additional permissions in Teams. Please allow microphone access when prompted.'
+        : 'Speech recognition is not supported in this browser. Please use Chrome, Safari, or Edge.';
+      alert(errorMsg);
       return;
     }
 
-    // Force enable audio on microphone interaction (critical for mobile)
-    console.log('🔊 Microphone interaction - force enabling audio for mobile...');
+    // Force enable audio on microphone interaction (critical for mobile and Teams)
+    console.log('🔊 Microphone interaction - force enabling audio for Teams/mobile...');
     setAudioEnabled(true); // Set immediately
     
     // Force audio enablement in the background without waiting
     enableAudio().then(() => {
       console.log('✅ Audio enablement completed during microphone interaction');
     }).catch(error => {
-      console.warn('🔇 Audio enabling failed but continuing (mobile compatibility):', error);
+      console.warn('🔇 Audio enabling failed but continuing (Teams/mobile compatibility):', error);
     });
 
     if (isListening) {
@@ -431,14 +442,33 @@ function App() {
       setIsListening(false);
       setIsMicActive(false);
     } else {
-      // Start listening
+      // Start listening with Teams-specific handling
       try {
-        console.log('🎤 Starting speech recognition for mobile device');
+        console.log('🎤 Starting speech recognition for Teams environment');
+        
+        // Request microphone permission explicitly for Teams
+        if (isInTeams && navigator.permissions) {
+          try {
+            const permissionStatus = await navigator.permissions.query({ name: 'microphone' });
+            console.log('🎤 Microphone permission status:', permissionStatus.state);
+            
+            if (permissionStatus.state === 'denied') {
+              alert('Microphone access is required. Please enable microphone permissions in your browser settings and reload the page.');
+              return;
+            }
+          } catch (permError) {
+            console.warn('🎤 Could not check microphone permissions:', permError);
+          }
+        }
+        
         recognition.start();
         setIsMicActive(true);
       } catch (error) {
         console.error('❌ Error starting speech recognition:', error);
-        alert('Error starting microphone. Please check your microphone permissions.');
+        const errorMsg = isInTeams 
+          ? 'Error starting microphone in Teams. Please ensure microphone permissions are granted and try again.'
+          : 'Error starting microphone. Please check your microphone permissions.';
+        alert(errorMsg);
         setIsMicActive(false);
       }
     }
