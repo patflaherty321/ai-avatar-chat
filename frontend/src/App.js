@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Avatar from './Avatar';
 import './App.css';
+import * as microsoftTeams from '@microsoft/teams-js';
 
 function App() {
   const [messages, setMessages] = useState([
@@ -18,6 +19,8 @@ function App() {
   const [horizontalPadding, setHorizontalPadding] = useState(20); // Changed from 60 to 20 for mobile
   const [maxWidth, setMaxWidth] = useState('100%');
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1200);
+  const [isInTeams, setIsInTeams] = useState(false);
+  const [isTeamsInitialized, setIsTeamsInitialized] = useState(false);
 
   // Ref for auto-scrolling chat messages
   const messagesEndRef = useRef(null);
@@ -104,6 +107,39 @@ function App() {
       clearTimeout(resizeTimeout);
     };
   }, [calculateLayout]);
+
+  // Initialize Microsoft Teams SDK
+  useEffect(() => {
+    const initializeTeams = async () => {
+      try {
+        // Detect if we're running in Teams
+        const inTeams = window.name === 'embedded-page-container' || 
+                       window.navigator.userAgent.includes('Teams') ||
+                       window.location.href.includes('teams.microsoft.com');
+        
+        setIsInTeams(inTeams);
+        
+        if (inTeams) {
+          console.log('🔵 Initializing Teams SDK...');
+          
+          // Initialize the Teams SDK
+          await microsoftTeams.app.initialize();
+          
+          // Check if we can request permissions
+          const context = await microsoftTeams.app.getContext();
+          console.log('📋 Teams context:', context);
+          
+          setIsTeamsInitialized(true);
+          console.log('✅ Teams SDK initialized successfully');
+        }
+      } catch (error) {
+        console.error('❌ Teams initialization failed:', error);
+        setIsTeamsInitialized(false);
+      }
+    };
+
+    initializeTeams();
+  }, []);
 
   const enableAudio = useCallback(async () => {
     try {
@@ -407,14 +443,7 @@ function App() {
   }, [sendMessage]);
 
   const toggleMicrophone = useCallback(async () => {
-    console.log('🎤 toggleMicrophone called, recognition available:', !!recognition);
-    
-    // Detect if running in Teams
-    const isInTeams = window.location.href.includes('teams.microsoft.com') || 
-                     window.parent !== window || 
-                     document.referrer.includes('teams.microsoft.com');
-    
-    console.log('🏢 Teams detection:', { isInTeams, href: window.location.href, inFrame: window.parent !== window });
+    console.log('🎤 toggleMicrophone called, recognition available:', !!recognition, 'Teams initialized:', isTeamsInitialized);
     
     if (!recognition) {
       const errorMsg = isInTeams 
@@ -446,8 +475,19 @@ function App() {
       try {
         console.log('🎤 Starting speech recognition for Teams environment');
         
-        // Request microphone permission explicitly for Teams
-        if (isInTeams && navigator.permissions) {
+        // Request microphone permission with Teams SDK if available
+        if (isInTeams && isTeamsInitialized) {
+          try {
+            console.log('🔵 Running in Teams environment - using browser permissions API...');
+            // In Teams apps, we rely on the device permissions in the manifest and browser APIs
+            // The Teams SDK doesn't have a direct permissions API for microphone
+          } catch (teamsPermError) {
+            console.warn('⚠️ Teams permission handling:', teamsPermError);
+          }
+        }
+        
+        // Request microphone permission explicitly for Teams/browsers
+        if (navigator.permissions) {
           try {
             const permissionStatus = await navigator.permissions.query({ name: 'microphone' });
             console.log('🎤 Microphone permission status:', permissionStatus.state);
@@ -472,7 +512,7 @@ function App() {
         setIsMicActive(false);
       }
     }
-  }, [recognition, enableAudio, isListening]);
+  }, [recognition, enableAudio, isListening, isInTeams, isTeamsInitialized]);
 
   return (
     <div className="App">

@@ -1,0 +1,51 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.16/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.16",
+  "version": "1.0.0",
+  "id": "00000000-0000-0000-0000-000000000000",
+  "packageName": "com.yourcompany.avatar-chat",
+  "developer": {
+    "name": "Avatar Chat",
+    "websiteUrl": "https://your-domain.com",
+    "privacyUrl": "https://your-domain.com/privacy",
+    "termsOfUseUrl": "https://your-domain.com/terms"
+  },
+  "icons": {
+    "color": "icon-color.png",
+    "outline": "icon-outline.png"
+  },
+  "name": {
+    "short": "AI Avatar Chat",
+    "full": "AI Avatar Chat with Voice Interaction"
+  },
+  "description": {
+    "short": "Interactive AI avatar with voice conversation capabilities",
+    "full": "An AI-powered avatar that can engage in voice conversations, providing natural speech recognition and audio responses within Microsoft Teams."
+  },
+  "accentColor": "#FFFFFF",
+  "configurableTabs": [],
+  "staticTabs": [
+    {
+      "entityId": "avatar-chat",
+      "name": "AI Avatar",
+      "contentUrl": "https://your-vercel-app.vercel.app/",
+      "websiteUrl": "https://your-vercel-app.vercel.app/",
+      "scopes": ["personal", "team"]
+    }
+  ],
+  "permissions": [
+    "identity",
+    "messageTeamMembers"
+  ],
+  "devicePermissions": [
+    "media"
+  ],
+  "validDomains": [
+    "your-vercel-app.vercel.app",
+    "your-domain.com"
+  ],
+  "webApplicationInfo": {
+    "id": "00000000-0000-0000-0000-000000000000",
+    "resource": "https://RscBasedStoreApp"
+  }
+}
