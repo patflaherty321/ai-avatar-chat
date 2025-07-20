@@ -2,13 +2,13 @@
   "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.16/MicrosoftTeams.schema.json",
   "manifestVersion": "1.16",
   "version": "1.0.0",
-  "id": "00000000-0000-0000-0000-000000000000",
-  "packageName": "com.yourcompany.avatar-chat",
+  "id": "913AFD8B-B328-43D7-82F3-6C5F5FCCC332",
+  "packageName": "com.patflaherty.avatar-chat",
   "developer": {
-    "name": "Avatar Chat",
-    "websiteUrl": "https://your-domain.com",
-    "privacyUrl": "https://your-domain.com/privacy",
-    "termsOfUseUrl": "https://your-domain.com/terms"
+    "name": "Pat Flaherty",
+    "websiteUrl": "https://simple-avatar-chat.vercel.app",
+    "privacyUrl": "https://simple-avatar-chat.vercel.app/privacy",
+    "termsOfUseUrl": "https://simple-avatar-chat.vercel.app/terms"
   },
   "icons": {
     "color": "icon-color.png",
@@ -28,8 +28,8 @@
     {
       "entityId": "avatar-chat",
       "name": "AI Avatar",
-      "contentUrl": "https://your-vercel-app.vercel.app/",
-      "websiteUrl": "https://your-vercel-app.vercel.app/",
+      "contentUrl": "https://simple-avatar-chat.vercel.app/",
+      "websiteUrl": "https://simple-avatar-chat.vercel.app/",
       "scopes": ["personal", "team"]
     }
   ],
@@ -41,11 +41,10 @@
     "media"
   ],
   "validDomains": [
-    "your-vercel-app.vercel.app",
-    "your-domain.com"
+    "simple-avatar-chat.vercel.app"
   ],
   "webApplicationInfo": {
-    "id": "00000000-0000-0000-0000-000000000000",
+    "id": "28490ced-dcda-4b28-85c4-0a4af5431df7",
     "resource": "https://RscBasedStoreApp"
   }
 }
