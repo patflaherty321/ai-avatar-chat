@@ -1,0 +1,50 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.16/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.16",
+  "version": "1.0.0",
+  "id": "913AFD8B-B328-43D7-82F3-6C5F5FCCC332",
+  "packageName": "com.patflaherty.avatar-chat",
+  "developer": {
+    "name": "Pat Flaherty",
+    "websiteUrl": "https://simple-avatar-chat.vercel.app",
+    "privacyUrl": "https://simple-avatar-chat.vercel.app/privacy",
+    "termsOfUseUrl": "https://simple-avatar-chat.vercel.app/terms"
+  },
+  "icons": {
+    "color": "icon-color.png",
+    "outline": "icon-outline.png"
+  },
+  "name": {
+    "short": "AI Avatar Chat",
+    "full": "AI Avatar Chat with Voice Interaction"
+  },
+  "description": {
+    "short": "Interactive AI avatar with voice conversation capabilities",
+    "full": "An AI-powered avatar that can engage in voice conversations, providing natural speech recognition and audio responses within Microsoft Teams."
+  },
+  "accentColor": "#FFFFFF",
+  "configurableTabs": [],
+  "staticTabs": [
+    {
+      "entityId": "avatar-chat",
+      "name": "AI Avatar",
+      "contentUrl": "https://simple-avatar-chat.vercel.app/",
+      "websiteUrl": "https://simple-avatar-chat.vercel.app/",
+      "scopes": ["personal", "team"]
+    }
+  ],
+  "permissions": [
+    "identity",
+    "messageTeamMembers"
+  ],
+  "devicePermissions": [
+    "media"
+  ],
+  "validDomains": [
+    "simple-avatar-chat.vercel.app"
+  ],
+  "webApplicationInfo": {
+    "id": "00000000-0000-0000-0000-000000000000",
+    "resource": "https://RscBasedStoreApp"
+  }
+}
