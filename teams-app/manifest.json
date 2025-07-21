@@ -15,8 +15,8 @@
     "full": "AI Avatar Chat - Interactive AI Companion"
   },
   "description": {
-    "short": "Interactive AI Avatar Chat application",
-    "full": "An interactive AI Avatar Chat application that provides conversational AI with visual avatar responses, integrated seamlessly into Microsoft Teams."
+    "short": "Interactive AI Avatar Chat (Text Input)",
+    "full": "Chat with an AI-powered avatar that responds with synchronized lip movements and voice. In Teams, please use text input for the best experience."
   },
   "icons": {
     "outline": "outline.png",
@@ -41,6 +41,9 @@
   "permissions": [
     "identity",
     "messageTeamMembers"
+  ],
+  "devicePermissions": [
+    "media"
   ],
   "showLoadingIndicator": false,
   "isFullScreen": false,

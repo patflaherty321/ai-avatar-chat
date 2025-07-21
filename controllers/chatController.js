@@ -33,6 +33,7 @@ const axios = require('axios');
 const fs = require('fs-extra');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
+const getDuration = require('mp3-duration');
 
 // Initialize OpenAI client
 let openaiClient = null;
@@ -128,9 +129,13 @@ async function textToSpeechWithVisemes(text) {
     
     await fs.writeFile(audioPath, speechResponse.data);
 
-    // Generate mock viseme data (Azure Speech SDK would provide real visemes)
-    // For now, we'll create estimated viseme timings
-    const visemes = generateMockVisemes(text);
+    // Get actual audio duration and generate duration-matched visemes
+    const actualAudioDurationMs = await getAudioDurationMs(audioPath);
+    const visemes = generateDurationMatchedVisemes(text, actualAudioDurationMs);
+
+    console.log(`[AUDIO-VISEME] 🎵 Audio duration: ${actualAudioDurationMs}ms (${(actualAudioDurationMs/1000).toFixed(2)}s)`);
+    console.log(`[AUDIO-VISEME] 🎭 Viseme span: ${visemes[visemes.length - 1]?.timeMs || 0}ms`);
+    console.log(`[AUDIO-VISEME] ✅ Duration match: ${Math.abs(actualAudioDurationMs - (visemes[visemes.length - 1]?.timeMs || 0)) < 100 ? 'PERFECT' : 'CLOSE'}`);
 
     return {
       audioFilename,
@@ -142,6 +147,85 @@ async function textToSpeechWithVisemes(text) {
     console.error('Azure TTS error:', error);
     throw new Error('Failed to generate speech with visemes');
   }
+}
+
+/**
+ * Get audio duration in milliseconds from MP3 file
+ */
+async function getAudioDurationMs(audioPath) {
+  try {
+    const durationSeconds = await getDuration(audioPath);
+    return Math.round(durationSeconds * 1000);
+  } catch (error) {
+    console.error('[AUDIO] Error getting audio duration:', error);
+    // Fallback: estimate based on file size (rough approximation)
+    const stats = await fs.stat(audioPath);
+    const fileSizeKb = stats.size / 1024;
+    // Rough estimate: 1KB ≈ 80ms for 24kHz 160kbps mono MP3
+    const estimatedMs = Math.round(fileSizeKb * 80);
+    console.warn(`[AUDIO] ⚠️ Using file size estimate: ${estimatedMs}ms`);
+    return estimatedMs;
+  }
+}
+
+/**
+ * Generate viseme data that matches the actual audio duration
+ * Creates mock visemes first, then scales them to match real audio timing
+ */
+function generateDurationMatchedVisemes(text, actualAudioDurationMs) {
+  // Generate initial mock visemes using existing logic
+  const mockVisemes = generateMockVisemes(text);
+  
+  if (mockVisemes.length === 0) {
+    console.warn('[VISEME] ⚠️ No mock visemes generated, creating minimal sequence');
+    return [
+      { visemeId: 0, timeMs: 0, duration: 100 },
+      { visemeId: 2, timeMs: 100, duration: actualAudioDurationMs - 200 },
+      { visemeId: 0, timeMs: actualAudioDurationMs - 100, duration: 100 }
+    ];
+  }
+
+  const mockDuration = mockVisemes[mockVisemes.length - 1]?.timeMs || 1000;
+  const scaleFactor = actualAudioDurationMs / mockDuration;
+  
+  console.log(`[VISEME] 📊 DURATION SCALING:`);
+  console.log(`[VISEME] Mock duration: ${mockDuration}ms`);
+  console.log(`[VISEME] Actual duration: ${actualAudioDurationMs}ms`);
+  console.log(`[VISEME] Scale factor: ${scaleFactor.toFixed(3)}x`);
+
+  // Scale all viseme timings to match actual audio duration
+  const scaledVisemes = mockVisemes.map((viseme, index) => {
+    const scaledTimeMs = Math.round(viseme.timeMs * scaleFactor);
+    const scaledDuration = Math.round(viseme.duration * scaleFactor);
+    
+    return {
+      visemeId: viseme.visemeId,
+      timeMs: scaledTimeMs,
+      duration: scaledDuration
+    };
+  });
+
+  // Ensure the last viseme doesn't exceed audio duration
+  const lastViseme = scaledVisemes[scaledVisemes.length - 1];
+  if (lastViseme && lastViseme.timeMs > actualAudioDurationMs - 100) {
+    lastViseme.timeMs = actualAudioDurationMs - 100;
+    lastViseme.duration = 100;
+  }
+
+  // Add final silence at exact audio end
+  if (lastViseme && lastViseme.timeMs < actualAudioDurationMs - 50) {
+    scaledVisemes.push({
+      visemeId: 0,
+      timeMs: actualAudioDurationMs - 50,
+      duration: 50
+    });
+  }
+
+  console.log(`[VISEME] ✅ Scaled ${scaledVisemes.length} visemes to match ${actualAudioDurationMs}ms duration`);
+  console.log(`[VISEME] First 3 scaled:`, scaledVisemes.slice(0, 3));
+  console.log(`[VISEME] Last 3 scaled:`, scaledVisemes.slice(-3));
+  
+  return scaledVisemes;
 }
 
 /**
@@ -244,6 +328,12 @@ function generateMockVisemes(text) {
     duration: 100
   });
 
+  // Validation and cleanup
+  const validVisemes = visemes.filter(v => v.visemeId >= 0 && v.visemeId <= 21 && v.timeMs >= 0);
+  if (validVisemes.length !== visemes.length) {
+    console.warn(`[VISEME] ⚠️ Filtered ${visemes.length - validVisemes.length} invalid visemes`);
+  }
+
   // Ensure we have at least a minimum sequence
   if (visemes.length <= 2) { // If we only have initial and final silence
     visemes.push({
@@ -254,11 +344,14 @@ function generateMockVisemes(text) {
   }
 
   // Detailed logging for debugging
-  console.log(`[VISEME] Enhanced generator created ${visemes.length} visemes for "${text.substring(0, 30)}..." spanning ${currentTime}ms`);
-  console.log(`[VISEME] First 3 visemes:`, visemes.slice(0, 3));
-  console.log(`[VISEME] Last 3 visemes:`, visemes.slice(-3));
+  console.log(`[VISEME] 📊 Enhanced generator for text length: ${text.length} chars`);
+  console.log(`[VISEME] 📊 Created ${validVisemes.length} visemes spanning ${currentTime}ms (${(currentTime/1000).toFixed(2)}s)`);
+  console.log(`[VISEME] 📊 Words processed: ${words.length}`);
+  console.log(`[VISEME] First 3 visemes:`, validVisemes.slice(0, 3));
+  console.log(`[VISEME] Last 3 visemes:`, validVisemes.slice(-3));
+  console.log(`[VISEME] Time distribution: every ${(currentTime/validVisemes.length).toFixed(1)}ms average`);
   
-  return visemes;
+  return validVisemes;
 }
 
 /**

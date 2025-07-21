@@ -1,0 +1,39 @@
+{
+  "version": 2,
+  "buildCommand": "echo 'Using pre-built files'",
+  "outputDirectory": "frontend/build",
+  "installCommand": "echo 'Skipping root install'",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Frame-Options",
+          "value": "ALLOWALL"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https: wss: *.teams.microsoft.com *.sharepoint.com *.office.com *.microsoft.com *.onmicrosoft.com *.skype.com *.live.com *.office365.com *.microsoftonline.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob: *.teams.microsoft.com *.sharepoint.com *.office.com *.microsoft.com *.skype.com; style-src 'self' 'unsafe-inline' https: data: *.teams.microsoft.com *.sharepoint.com *.office.com *.microsoft.com; img-src 'self' data: blob: https: *.teams.microsoft.com *.sharepoint.com *.office.com *.microsoft.com *.onmicrosoft.com *.skype.com *.live.com *.office365.com *.microsoftonline.com *.ams.gcc.teams.microsoft.com *.asm.skype.com *.asyncgw.teams.microsoft.com *.giphy.com *.loki.delve.office.com *.office.net *.officeapps.live.com *.sharepoint-df.com bot-framework.azureedge.net conn-afd-prod-endpoint-bmc9bqahasf3grgk.b01.azurefd.net connectoricons-prod.azureedge.net content.powerapps.com docs.botframework.com i.vimeocdn.com i.ytimg.com img.youtube.com local.teams.office.com:* marketplacecdn.azureedge.net media.licdn.com outlook.office.com pbs.twimg.com raw.githubusercontent.com res.public.onecdn.static.microsoft skypeteamsbotstorage.blob.core.windows.net statics.teams.microsoft.com substrate.office.com teams.microsoft.com urlp.sfbassets.com mugshot0.assets-yammer.com; font-src 'self' data: https: *.teams.microsoft.com *.office.com *.microsoft.com; connect-src 'self' https: wss: data: blob: *.teams.microsoft.com *.sharepoint.com *.office.com *.microsoft.com *.onmicrosoft.com *.skype.com *.live.com *.office365.com *.microsoftonline.com; media-src 'self' https: data: blob: *.teams.microsoft.com *.sharepoint.com *.office.com *.microsoft.com; frame-src 'self' https: *.teams.microsoft.com *.sharepoint.com *.office.com *.microsoft.com *.onmicrosoft.com; worker-src 'self' blob: data: *.teams.microsoft.com *.microsoft.com;"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "microphone=(self \"https://ai-avatar-chat-dusky.vercel.app\" \"https://teams.microsoft.com\" \"https://*.teams.microsoft.com\" \"https://*.microsoft.com\" \"https://*.office.com\" \"https://*.sharepoint.com\"), camera=(self \"https://ai-avatar-chat-dusky.vercel.app\" \"https://teams.microsoft.com\" \"https://*.teams.microsoft.com\" \"https://*.microsoft.com\"), geolocation=*, midi=*, notifications=*, push=*, sync-xhr=*, magnetometer=*, gyroscope=*, speaker=*, vibrate=*, fullscreen=*, autoplay=(self \"https://ai-avatar-chat-dusky.vercel.app\" \"https://teams.microsoft.com\" \"https://*.teams.microsoft.com\" \"https://*.microsoft.com\")"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        }
+      ]
+    }
+  ]
+}

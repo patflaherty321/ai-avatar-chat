@@ -1,7 +1,7 @@
 {
   "version": 2,
-  "buildCommand": "cd frontend && npm ci && npm run build",
-  "outputDirectory": "frontend/build",
+  "buildCommand": "cd frontend && npm install && npm run build && cp -r build/* ../",
+  "outputDirectory": ".",
   "installCommand": "echo 'Skipping root install'",
   "rewrites": [
     {
@@ -15,15 +15,15 @@
       "headers": [
         {
           "key": "X-Frame-Options",
-          "value": "SAMEORIGIN"
+          "value": "ALLOWALL"
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https: wss:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https: data: blob:; style-src 'self' 'unsafe-inline' https: data:; img-src 'self' data: blob: https: *.teams.microsoft.com *.sharepoint.com *.office.com *.microsoft.com; font-src 'self' data: https:; connect-src 'self' https: wss: data: blob:; media-src 'self' https: data: blob:; frame-src 'self' https:; worker-src 'self' blob: data:;"
+          "value": "frame-ancestors *;"
         },
         {
-          "key": "Permissions-Policy",
-          "value": "microphone=*, camera=*, geolocation=*, midi=*, notifications=*, push=*, sync-xhr=*, magnetometer=*, gyroscope=*, speaker=*, vibrate=*, fullscreen=*"
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
         }
       ]
     }

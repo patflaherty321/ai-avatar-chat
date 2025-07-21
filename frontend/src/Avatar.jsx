@@ -15,7 +15,6 @@ function Avatar({
   const visemeTimersRef = useRef([]);
   const lastAudioKeyRef = useRef(null); // Track the last played audio to prevent duplicates
   const [internalTalking, setInternalTalking] = useState(false); // Internal talking state controlled by audio
-  const [audioPreloaded, setAudioPreloaded] = useState(false);
 
   // Remove dynamic scaling - keep avatar at consistent 170% scale
   // const calculateScale = () => {
@@ -81,8 +80,16 @@ function Avatar({
     visemeTimersRef.current.forEach(clearTimeout);
     visemeTimersRef.current = [];
     
-    // Only start if we have all required data
+    // Enhanced validation with detailed logging
     if (!audioUrl || !visemeInput || !visemes || visemes.length === 0) {
+      console.log('[RIVE AVATAR] 🚫 Missing required data:', { 
+        audioUrl: !!audioUrl, 
+        visemeInput: !!visemeInput, 
+        visemes: visemes?.length || 0,
+        actualAudioUrl: audioUrl,
+        actualVisemes: visemes
+      });
+      
       // Cleanup previous audio if no new audio to play
       if (audioRef.current) {
         audioRef.current.pause();
@@ -94,7 +101,6 @@ function Avatar({
       if (visemeInput) {
         visemeInput.value = 0;
       }
-      setAudioPreloaded(false);
       return;
     }
 
@@ -140,14 +146,21 @@ function Avatar({
       (a.timeMs || 0) - (b.timeMs || 0)
     );
 
-    // Debug log the viseme data
+    // Debug log the viseme data with enhanced details
+    console.log('[RIVE AVATAR] 📊 VISEME ANALYSIS:');
+    console.log('[RIVE AVATAR] Total visemes:', sortedVisemes.length);
     console.log('[RIVE AVATAR] First 5 visemes:', sortedVisemes.slice(0, 5));
     console.log('[RIVE AVATAR] Last 5 visemes:', sortedVisemes.slice(-5));
+    console.log('[RIVE AVATAR] Time span:', sortedVisemes[0]?.timeMs || 0, 'to', sortedVisemes[sortedVisemes.length - 1]?.timeMs || 0, 'ms');
+    console.log('[RIVE AVATAR] Expected duration:', ((sortedVisemes[sortedVisemes.length - 1]?.timeMs || 0) / 1000).toFixed(2), 'seconds');
 
     // Setup audio event listeners
     audio.addEventListener('canplaythrough', () => {
-      setAudioPreloaded(true);
       console.log('[RIVE AVATAR] Audio preloaded and ready to play');
+      // Start playback immediately when audio is ready
+      if (lastAudioKeyRef.current === audioKey) {
+        startEnhancedSync();
+      }
     });
     
     audio.addEventListener('loadstart', () => {
@@ -155,7 +168,7 @@ function Avatar({
     });
     
     audio.addEventListener('loadeddata', () => {
-      console.log('[RIVE AVATAR] Audio data loaded');
+      console.log('[RIVE AVATAR] ✅ Audio data loaded, duration:', audio.duration ? audio.duration.toFixed(2) + 's' : 'unknown');
     });
     
     audio.addEventListener('ended', () => {
@@ -195,7 +208,10 @@ function Avatar({
         
         // Start audio playback
         await audio.play();
-        console.log('[RIVE AVATAR] Audio started successfully - duration:', Math.round(audio.duration * 1000), 'ms');
+        console.log('[RIVE AVATAR] ✅ Audio started successfully');
+        console.log('[RIVE AVATAR] 📊 Audio duration:', Math.round(audio.duration * 1000), 'ms');
+        console.log('[RIVE AVATAR] 📊 Viseme duration:', sortedVisemes[sortedVisemes.length - 1]?.timeMs || 0, 'ms');
+        console.log('[RIVE AVATAR] 📊 Duration match:', Math.abs((audio.duration * 1000) - (sortedVisemes[sortedVisemes.length - 1]?.timeMs || 0)) < 500 ? 'GOOD' : 'MISMATCH');
         
         // Set internal talking state to true when audio starts
         setInternalTalking(true);
@@ -203,8 +219,9 @@ function Avatar({
         // Define last tracked viseme for logging
         let lastVisemeId = -1;
         
-        // Improved real-time sync using requestAnimationFrame
+        // Remove the sync count limit - let it run until audio actually ends
         const syncVisemesToAudio = () => {
+          // Only stop if the audio is paused/ended or the component unmounted
           if (!audio || audio.paused || audio.ended || !visemeInput) {
             if (visemeInput) {
               visemeInput.value = 0; // Reset to neutral when not playing
@@ -213,7 +230,11 @@ function Avatar({
           }
           
           const currentTimeMs = audio.currentTime * 1000; // Convert to milliseconds
-          console.log(`[RIVE AVATAR] Sync check at ${Math.round(currentTimeMs)}ms`);
+          
+          // Reduce logging frequency to improve performance - log only every 500ms
+          if (Math.round(currentTimeMs) % 500 === 0) {
+            console.log(`[RIVE AVATAR] Sync at ${Math.round(currentTimeMs)}ms`);
+          }
           
           // Find the current viseme based on audio time
           let currentViseme = null;
@@ -230,20 +251,25 @@ function Avatar({
             }
           }
           
-          // If we're past all visemes but audio is still playing, use the last viseme
-          if (!currentViseme && lastViseme && sortedVisemes.length > 0) {
+          // CRITICAL FIX: Always use the last viseme if we're past all defined visemes
+          // This ensures animation continues until audio actually ends
+          if (!currentViseme && lastViseme && currentTimeMs > (sortedVisemes[sortedVisemes.length - 1]?.timeMs || 0)) {
             currentViseme = lastViseme;
+            
+            // If we're significantly past the last viseme time, log it once
+            if (currentTimeMs > (sortedVisemes[sortedVisemes.length - 1]?.timeMs || 0) + 1000 && 
+                Math.round(currentTimeMs) % 2000 === 0) {
+              console.log(`[RIVE AVATAR] ⚠️ Using last viseme at ${Math.round(currentTimeMs)}ms, exceeding last defined viseme time`);
+            }
           }
           
           if (currentViseme) {
             const visemeId = currentViseme.visemeId || currentViseme.id || 0;
             const expectedViseme = Math.max(0, Math.min(21, visemeId));
             
-            // Always update the viseme (remove the optimization for now to debug)
-            visemeInput.value = expectedViseme;
-            
-            // Log viseme changes for debugging
-            if (expectedViseme !== lastVisemeId) {
+            // Only update and log if the viseme has changed
+            if (visemeInput.value !== expectedViseme) {
+              visemeInput.value = expectedViseme;
               console.log(`[RIVE AVATAR] Viseme change: ${lastVisemeId} → ${expectedViseme} at ${Math.round(currentTimeMs)}ms`);
               lastVisemeId = expectedViseme;
             }
@@ -256,7 +282,7 @@ function Avatar({
             }
           }
           
-          // Continue syncing if audio is still playing
+          // Always continue syncing if audio is still playing
           if (!audio.paused && !audio.ended) {
             requestAnimationFrame(syncVisemesToAudio);
           } else {
@@ -279,19 +305,6 @@ function Avatar({
       }
     };
 
-    // Only start playback once audio is preloaded
-    if (audioPreloaded) {
-      startEnhancedSync();
-    } else {
-      // Add event listener for when audio is ready
-      audio.addEventListener('canplaythrough', () => {
-        // Only start if this is still the current audio
-        if (lastAudioKeyRef.current === audioKey) {
-          startEnhancedSync();
-        }
-      }, { once: true });
-    }
-
     // Cleanup function
     return () => {
       visemeTimersRef.current.forEach(clearTimeout);
@@ -305,7 +318,7 @@ function Avatar({
         visemeInput.value = 0;
       }
     };
-  }, [audioUrl, visemes, visemeInput, audioPreloaded]); // Added audioPreloaded to dependency array
+  }, [audioUrl, visemes, visemeInput]); // Removed audioPreloaded from dependency array
 
   return (
     <div style={{

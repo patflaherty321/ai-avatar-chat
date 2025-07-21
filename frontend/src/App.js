@@ -355,13 +355,39 @@ function App() {
   // Initialize speech recognition
   useEffect(() => {
     console.log('🎤 Initializing speech recognition...');
+    
+    // Skip speech recognition entirely in Teams due to browser restrictions
+    if (isInTeams) {
+      console.log('🚫 Skipping speech recognition initialization in Teams environment');
+      setRecognition(null);
+      return;
+    }
+    
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       const recognitionInstance = new SpeechRecognition();
       
       recognitionInstance.continuous = false;
       recognitionInstance.interimResults = false;
-      recognitionInstance.lang = 'en-US';
+      
+      // For regular browsers, use standard language settings
+      const languagesToTry = ['en-US', 'en'];
+      let langSet = false;
+      
+      for (const lang of languagesToTry) {
+        try {
+          recognitionInstance.lang = lang;
+          langSet = true;
+          console.log(`✅ Speech recognition language set to: "${lang}"`);
+          break;
+        } catch (error) {
+          console.warn(`⚠️ Failed to set language to "${lang}":`, error);
+        }
+      }
+      
+      if (!langSet) {
+        console.warn('⚠️ Could not set any language, using default');
+      }
       
       recognitionInstance.onstart = () => {
         console.log('🎤 Speech recognition started');
@@ -387,9 +413,41 @@ function App() {
       };
       
       recognitionInstance.onerror = (event) => {
-        console.error('❌ Speech recognition error:', event.error);
-        setIsListening(false);
-        setIsMicActive(false);
+        console.error('❌ Speech recognition error:', event.error, 'Type:', event.type);
+        
+        // If it's a language-not-supported error in Teams, try to reinitialize with different approach
+        if (event.error === 'language-not-supported' && isInTeams) {
+          console.log('🔄 Language error in Teams, trying to reinitialize with different settings...');
+          setTimeout(() => {
+            try {
+              // Try to create a new instance without explicitly setting language
+              const fallbackRecognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+              fallbackRecognition.continuous = false;
+              fallbackRecognition.interimResults = false;
+              
+              // Don't set language at all - let browser choose
+              console.log('🔄 Attempting browser default language for speech recognition...');
+              
+              fallbackRecognition.onresult = recognitionInstance.onresult;
+              fallbackRecognition.onend = recognitionInstance.onend;
+              fallbackRecognition.onerror = (fallbackEvent) => {
+                console.error('❌ Fallback speech recognition also failed:', fallbackEvent.error);
+                setIsListening(false);
+                setIsMicActive(false);
+              };
+              
+              setRecognition(fallbackRecognition);
+              console.log('✅ Fallback speech recognition initialized without language setting');
+            } catch (fallbackError) {
+              console.error('❌ Could not create fallback recognition:', fallbackError);
+              setIsListening(false);
+              setIsMicActive(false);
+            }
+          }, 1000);
+        } else {
+          setIsListening(false);
+          setIsMicActive(false);
+        }
       };
       
       recognitionInstance.onend = () => {
@@ -403,7 +461,7 @@ function App() {
     } else {
       console.warn('⚠️ Speech recognition not supported in this browser');
     }
-  }, [sendMessageToAI]);
+  }, [sendMessageToAI, isInTeams]);
 
   const sendMessage = useCallback(async () => {
     console.log('📝 sendMessage called with inputMessage:', inputMessage);
@@ -445,10 +503,15 @@ function App() {
   const toggleMicrophone = useCallback(async () => {
     console.log('🎤 toggleMicrophone called, recognition available:', !!recognition, 'Teams initialized:', isTeamsInitialized);
     
+    // Block speech recognition in Teams completely
+    if (isInTeams) {
+      console.log('🚫 Speech recognition blocked in Teams environment');
+      alert('Speech recognition is not available in Microsoft Teams due to browser restrictions. Please use text input instead.');
+      return;
+    }
+    
     if (!recognition) {
-      const errorMsg = isInTeams 
-        ? 'Speech recognition requires additional permissions in Teams. Please allow microphone access when prompted.'
-        : 'Speech recognition is not supported in this browser. Please use Chrome, Safari, or Edge.';
+      const errorMsg = 'Speech recognition is not supported in this browser. Please use Chrome, Safari, or Edge.';
       alert(errorMsg);
       return;
     }
@@ -478,27 +541,42 @@ function App() {
         // Request microphone permission with Teams SDK if available
         if (isInTeams && isTeamsInitialized) {
           try {
-            console.log('🔵 Running in Teams environment - using browser permissions API...');
-            // In Teams apps, we rely on the device permissions in the manifest and browser APIs
-            // The Teams SDK doesn't have a direct permissions API for microphone
+            console.log('🔵 Running in Teams environment - attempting Teams-specific permission handling...');
+            
+            // For Teams, we rely on the device permissions declared in the app manifest
+            // and use the standard browser getUserMedia API
+            console.log('🔵 Teams environment detected, using manifest permissions with getUserMedia');
           } catch (teamsPermError) {
-            console.warn('⚠️ Teams permission handling:', teamsPermError);
+            console.warn('⚠️ Teams permission handling failed:', teamsPermError);
+            // Continue with browser fallback
           }
         }
         
-        // Request microphone permission explicitly for Teams/browsers
-        if (navigator.permissions) {
-          try {
-            const permissionStatus = await navigator.permissions.query({ name: 'microphone' });
-            console.log('🎤 Microphone permission status:', permissionStatus.state);
-            
-            if (permissionStatus.state === 'denied') {
-              alert('Microphone access is required. Please enable microphone permissions in your browser settings and reload the page.');
-              return;
-            }
-          } catch (permError) {
-            console.warn('🎤 Could not check microphone permissions:', permError);
+        // Test actual microphone access with getUserMedia
+        try {
+          console.log('🎤 Testing microphone access with getUserMedia...');
+          const stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: { 
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true
+            } 
+          });
+          console.log('✅ Microphone access granted via getUserMedia');
+          
+          // Stop the test stream immediately
+          stream.getTracks().forEach(track => track.stop());
+        } catch (getUserMediaError) {
+          console.error('❌ getUserMedia failed:', getUserMediaError);
+          
+          if (getUserMediaError.name === 'NotAllowedError') {
+            alert('Microphone access denied. Please allow microphone permissions and try again.');
+          } else if (getUserMediaError.name === 'NotFoundError') {
+            alert('No microphone found. Please connect a microphone and try again.');
+          } else {
+            alert('Microphone access failed. Please check your microphone settings.');
           }
+          return;
         }
         
         recognition.start();
@@ -928,30 +1006,37 @@ function App() {
                 }}>
                   <button 
                     onClick={() => {
+                      if (isInTeams) {
+                        console.log('🚫 Speech recognition disabled in Teams environment');
+                        alert('Speech recognition is not available in Microsoft Teams. Please use text input instead.');
+                        return;
+                      }
                       console.log('🎤 Microphone button clicked');
                       toggleMicrophone();
                     }}
+                    disabled={isInTeams}
                     style={{
                       position: 'absolute',
-                      background: isListening ? '#FF3B30' : '#FFFFFF',
+                      background: isInTeams ? '#CCCCCC' : (isListening ? '#FF3B30' : '#FFFFFF'),
                       left: 0,
                       top: 0,
                       borderRadius: 24,
                       width: 48,
                       height: 48,
                       border: 'none',
-                      cursor: 'pointer',
+                      cursor: isInTeams ? 'not-allowed' : 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      boxShadow: isListening ? '0 4px 12px rgba(255, 59, 48, 0.3)' : '0 2px 4px rgba(0,0,0,0.1)',
+                      boxShadow: isInTeams ? 'none' : (isListening ? '0 4px 12px rgba(255, 59, 48, 0.3)' : '0 2px 4px rgba(0,0,0,0.1)'),
                       transition: 'all 0.2s ease',
-                      transform: isListening ? 'scale(1.1)' : 'scale(1)',
-                      overflow: 'hidden' // Ensure the pulse animation is masked by the circular button
+                      transform: (isListening && !isInTeams) ? 'scale(1.1)' : 'scale(1)',
+                      overflow: 'hidden', // Ensure the pulse animation is masked by the circular button
+                      opacity: isInTeams ? 0.5 : 1
                     }}
                   >
                     {/* Pulsating background animation */}
-                    {(isMicActive || isListening) && (
+                    {(isMicActive || isListening) && !isInTeams && (
                       <div
                         style={{
                           position: 'absolute',

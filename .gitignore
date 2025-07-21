@@ -7,3 +7,4 @@ backend/audio/
 frontend/node_modules/
 frontend/build/static/js/*.map
 frontend/build/static/css/*.map
+.vercel
