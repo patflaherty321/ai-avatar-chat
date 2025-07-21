@@ -318,9 +318,11 @@ function generateDurationMatchedVisemes(mockVisemes, actualDurationMs) {
     return mockVisemes;
   }
 
-  // Calculate scaling factor
-  const scaleFactor = actualDurationMs / mockDurationMs;
-  console.log(`[DURATION] 📐 Scaling factor: ${scaleFactor.toFixed(3)}`);
+  // Calculate scaling factor with slight extension for frontend sync
+  // Add 150ms buffer to ensure visemes extend slightly past audio for perfect sync
+  const extendedDurationMs = actualDurationMs + 150;
+  const scaleFactor = extendedDurationMs / mockDurationMs;
+  console.log(`[DURATION] 📐 Scaling factor: ${scaleFactor.toFixed(3)} (with 150ms sync buffer)`);
 
   // Scale all viseme timings
   const scaledVisemes = mockVisemes.map((viseme, index) => {
@@ -334,15 +336,15 @@ function generateDurationMatchedVisemes(mockVisemes, actualDurationMs) {
     };
   });
 
-  // Validation - ensure we don't exceed actual audio duration
-  const maxAllowedTime = actualDurationMs - 50; // Leave small buffer
+  // Validation - ensure we don't exceed extended duration
+  const maxAllowedTime = extendedDurationMs - 25; // Leave minimal buffer
   const validatedVisemes = scaledVisemes.filter(v => v.timeMs <= maxAllowedTime);
   
   if (validatedVisemes.length !== scaledVisemes.length) {
     console.warn(`[DURATION] ⚠️ Filtered ${scaledVisemes.length - validatedVisemes.length} visemes that exceeded audio duration`);
   }
 
-  console.log(`[DURATION] ✅ Duration matching complete: ${validatedVisemes.length} visemes scaled to ${actualDurationMs}ms`);
+  console.log(`[DURATION] ✅ Duration matching complete: ${validatedVisemes.length} visemes scaled to ${extendedDurationMs}ms (${actualDurationMs}ms audio + 150ms sync buffer)`);
   console.log(`[DURATION] First scaled viseme:`, validatedVisemes[0]);
   console.log(`[DURATION] Last scaled viseme:`, validatedVisemes[validatedVisemes.length - 1]);
   
