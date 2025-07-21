@@ -119,10 +119,20 @@ function Avatar({
     // Create audio element
     const audio = new Audio();
     
-    // Normalize URL based on source
-    const fullAudioUrl = audioUrl.startsWith('http') ? audioUrl : `http://localhost:3006${audioUrl}`;
+    // Normalize URL based on source - fix for production deployment
+    let fullAudioUrl;
+    if (audioUrl.startsWith('http')) {
+      fullAudioUrl = audioUrl;
+    } else {
+      // Use the same backend URL that the app is already using
+      const backendUrl = process.env.REACT_APP_BACKEND_URL || 'https://ai-avatar-chat-backend.onrender.com';
+      fullAudioUrl = `${backendUrl}${audioUrl}`;
+    }
+    
+    console.log('[RIVE AVATAR] Full audio URL:', fullAudioUrl);
     audio.src = fullAudioUrl;
     audio.volume = 1.0;
+    audio.crossOrigin = 'anonymous'; // Add CORS support
     audioRef.current = audio;
     
     // Sort visemes by time to ensure proper sequence
@@ -138,6 +148,14 @@ function Avatar({
     audio.addEventListener('canplaythrough', () => {
       setAudioPreloaded(true);
       console.log('[RIVE AVATAR] Audio preloaded and ready to play');
+    });
+    
+    audio.addEventListener('loadstart', () => {
+      console.log('[RIVE AVATAR] Audio load started');
+    });
+    
+    audio.addEventListener('loadeddata', () => {
+      console.log('[RIVE AVATAR] Audio data loaded');
     });
     
     audio.addEventListener('ended', () => {
@@ -157,6 +175,7 @@ function Avatar({
     
     audio.addEventListener('error', (e) => {
       console.error('[RIVE AVATAR] Audio error:', e);
+      console.error('[RIVE AVATAR] Audio error details:', audio.error);
       // Stop talking on error
       setInternalTalking(false);
       // Reset viseme
@@ -171,6 +190,9 @@ function Avatar({
     // Define the enhanced synchronization function
     const startEnhancedSync = async () => {
       try {
+        // Ensure user interaction has occurred
+        console.log('[RIVE AVATAR] Attempting to start audio playback...');
+        
         // Start audio playback
         await audio.play();
         console.log('[RIVE AVATAR] Audio started successfully - duration:', Math.round(audio.duration * 1000), 'ms');
@@ -183,7 +205,7 @@ function Avatar({
         
         // Improved real-time sync using requestAnimationFrame
         const syncVisemesToAudio = () => {
-          if (!audio || audio.paused || audio.ended) {
+          if (!audio || audio.paused || audio.ended || !visemeInput) {
             if (visemeInput) {
               visemeInput.value = 0; // Reset to neutral when not playing
             }
@@ -191,6 +213,7 @@ function Avatar({
           }
           
           const currentTimeMs = audio.currentTime * 1000; // Convert to milliseconds
+          console.log(`[RIVE AVATAR] Sync check at ${Math.round(currentTimeMs)}ms`);
           
           // Find the current viseme based on audio time
           let currentViseme = null;
@@ -216,20 +239,20 @@ function Avatar({
             const visemeId = currentViseme.visemeId || currentViseme.id || 0;
             const expectedViseme = Math.max(0, Math.min(21, visemeId));
             
-            // Only update if the viseme has changed (reduces unnecessary updates)
-            if (visemeInput.value !== expectedViseme) {
-              visemeInput.value = expectedViseme;
-              
-              // Log viseme changes for debugging
-              if (expectedViseme !== lastVisemeId) {
-                console.log(`[RIVE AVATAR] Viseme change: ${lastVisemeId} → ${expectedViseme} at ${Math.round(currentTimeMs)}ms`);
-                lastVisemeId = expectedViseme;
-              }
+            // Always update the viseme (remove the optimization for now to debug)
+            visemeInput.value = expectedViseme;
+            
+            // Log viseme changes for debugging
+            if (expectedViseme !== lastVisemeId) {
+              console.log(`[RIVE AVATAR] Viseme change: ${lastVisemeId} → ${expectedViseme} at ${Math.round(currentTimeMs)}ms`);
+              lastVisemeId = expectedViseme;
             }
           } else if (currentTimeMs < 100) {
             // Only reset to neutral if no visemes found and we're early in the audio
-            if (visemeInput.value !== 0) {
-              visemeInput.value = 0;
+            visemeInput.value = 0;
+            if (lastVisemeId !== 0) {
+              console.log(`[RIVE AVATAR] Reset to neutral at ${Math.round(currentTimeMs)}ms`);
+              lastVisemeId = 0;
             }
           }
           
@@ -241,6 +264,7 @@ function Avatar({
             if (visemeInput) {
               visemeInput.value = 0;
             }
+            console.log('[RIVE AVATAR] Sync stopped - audio ended');
           }
         };
         
