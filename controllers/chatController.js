@@ -145,14 +145,13 @@ async function textToSpeechWithVisemes(text) {
 }
 
 /**
- * Generate mock viseme data for lip sync using Azure Speech Service viseme IDs
- * Based on: https://learn.microsoft.com/en-us/azure/ai-services/speech-service/how-to-speech-synthesis-viseme
- * In production, this would come from Azure Speech SDK's real viseme events
+ * Generate improved viseme data for lip sync using Azure Speech Service viseme IDs
+ * Enhanced version for more accurate timing and proper pauses
  */
 function generateMockVisemes(text) {
   const visemes = [];
   const words = text.split(/\s+/).filter(word => word.length > 0);
-  let currentTime = 50; // Shorter initial delay
+  let currentTime = 30; // Initial delay (shorter for responsiveness)
   
   // Azure Speech Service viseme mapping (IDs 0-21)
   const visemeMap = {
@@ -160,8 +159,9 @@ function generateMockVisemes(text) {
     'a': 2,  // aa (as in "father")
     'e': 4,  // eh (as in "bed") 
     'i': 6,  // ih (as in "bit")
-    'o': 8,  // ao (as in "bought")
+    'o': 3,  // ao (as in "bought")
     'u': 10, // uw (as in "boot")
+    'y': 7,  // iy (as in "beat")
     
     // Consonants - Bilabials (lips together)
     'b': 21, 'p': 21, 'm': 21,
@@ -170,33 +170,60 @@ function generateMockVisemes(text) {
     'f': 18, 'v': 18,
     
     // Consonants - Dental/Alveolar (tongue to teeth/ridge)
-    't': 19, 'd': 19, 'n': 19, 'l': 14,
+    't': 19, 'd': 19, 'n': 19, 
+    'l': 14, 'r': 13,
     's': 15, 'z': 15,
     
-    // Consonants - Velar (back of tongue)
+    // Consonants - Palatal/Velar
+    'sh': 16, 'ch': 17, 'j': 17,
     'k': 20, 'g': 20,
     
-    // Consonants - Liquid
-    'r': 13, // r sounds
-    
-    // Additional vowel sounds
-    'y': 6,  // Similar to 'i'
-    'w': 7,  // Similar to 'uw' but with lip rounding
+    // Special cases
+    'w': 21, // Similar to 'uw' but with lip rounding
+    'h': 0,  // Neutral/rest position for 'h' sounds
     
     // Silence/Rest
     'default': 0  // Neutral/rest position
   };
 
+  // Add initial silence/neutral position
+  visemes.push({
+    visemeId: 0,
+    timeMs: 0,
+    duration: 30
+  });
+
   words.forEach((word, wordIndex) => {
-    // More realistic timing for TTS: average TTS is about 150-180 words per minute
-    // That's about 350-400ms per word, but TTS is often faster than human speech
-    const baseWordDuration = 150; // Base duration per word  
-    const wordDuration = baseWordDuration + (word.length * 15); // Shorter scaling
-    const phonemeDuration = Math.max(30, wordDuration / word.length); // Faster phonemes
+    // Add silence before each word (except the first one)
+    if (wordIndex > 0) {
+      visemes.push({
+        visemeId: 0,  // Silence/neutral
+        timeMs: Math.round(currentTime),
+        duration: 50  // Short pause between words
+      });
+      currentTime += 50;
+    }
+
+    // More realistic timing calculations
+    // Average speech rate: ~150 words per minute = ~400ms per word
+    // But TTS is often faster, so we adjust accordingly
+    const baseWordDuration = 100;  // Base duration per word
+    const wordDuration = baseWordDuration + (word.length * 30);  // Scale with word length
+    const phonemeDuration = Math.max(30, Math.min(100, wordDuration / Math.max(1, word.length)));  // Constrain to reasonable range
     
-    // Add visemes for each character in the word
+    // Process each character in the word (simplistic phoneme approximation)
     for (let i = 0; i < word.length; i++) {
-      const char = word[i].toLowerCase();
+      let char = word[i].toLowerCase();
+      
+      // Handle digraphs (two-character phonemes)
+      if (i < word.length - 1) {
+        const digraph = char + word[i+1].toLowerCase();
+        if (digraph === 'sh' || digraph === 'ch' || digraph === 'th') {
+          char = digraph;
+          i++; // Skip the next character since we used it
+        }
+      }
+      
       const visemeId = visemeMap[char] || visemeMap['default'];
       const phonemeTime = currentTime + (i * phonemeDuration);
       
@@ -208,30 +235,28 @@ function generateMockVisemes(text) {
     }
     
     currentTime += wordDuration;
-    
-    // Add a brief pause between words
-    if (wordIndex < words.length - 1) {
-      visemes.push({
-        visemeId: 0, // Neutral position
-        timeMs: Math.round(currentTime),
-        duration: 30 // Shorter pause
-      });
-      currentTime += 30;
-    }
+  });
+
+  // Add final silence/neutral position
+  visemes.push({
+    visemeId: 0,
+    timeMs: Math.round(currentTime),
+    duration: 100
   });
 
   // Ensure we have at least a minimum sequence
-  if (visemes.length === 0) {
+  if (visemes.length <= 2) { // If we only have initial and final silence
     visemes.push({
-      visemeId: 0,
-      timeMs: 0,
-      duration: 500
+      visemeId: 2, // Generic open mouth
+      timeMs: 50,
+      duration: 200
     });
   }
 
-  // Estimate realistic total duration for TTS (much shorter than our calculated time)
-  const estimatedTTSDuration = words.length * 180 + text.length * 10; // Rough estimate
-  console.log(`[VISEME] Generated ${visemes.length} visemes for "${text.substring(0, 30)}..." - Calculated: ${currentTime}ms, Estimated TTS: ${estimatedTTSDuration}ms`);
+  // Detailed logging for debugging
+  console.log(`[VISEME] Enhanced generator created ${visemes.length} visemes for "${text.substring(0, 30)}..." spanning ${currentTime}ms`);
+  console.log(`[VISEME] First 3 visemes:`, visemes.slice(0, 3));
+  console.log(`[VISEME] Last 3 visemes:`, visemes.slice(-3));
   
   return visemes;
 }
