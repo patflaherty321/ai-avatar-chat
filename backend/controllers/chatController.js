@@ -33,6 +33,7 @@ const axios = require('axios');
 const fs = require('fs-extra');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
+const getAudioDurationInSeconds = require('mp3-duration');
 
 // Initialize OpenAI client
 let openaiClient = null;
@@ -130,7 +131,11 @@ async function textToSpeechWithVisemes(text) {
 
     // Generate mock viseme data (Azure Speech SDK would provide real visemes)
     // For now, we'll create estimated viseme timings
-    const visemes = generateMockVisemes(text);
+    const mockVisemes = generateMockVisemes(text);
+    
+    // Get actual audio duration and scale visemes to match
+    const actualDurationMs = await getAudioDurationMs(audioPath);
+    const visemes = generateDurationMatchedVisemes(mockVisemes, actualDurationMs);
 
     return {
       audioFilename,
@@ -268,6 +273,80 @@ function generateMockVisemes(text) {
   console.log(`[VISEME] Time distribution: every ${(currentTime/validVisemes.length).toFixed(1)}ms average`);
   
   return validVisemes;
+}
+
+/**
+ * Get the actual duration of an MP3 file in milliseconds
+ * @param {string} audioPath - Path to the MP3 file
+ * @returns {Promise<number>} Duration in milliseconds
+ */
+async function getAudioDurationMs(audioPath) {
+  try {
+    const durationInSeconds = await getAudioDurationInSeconds(audioPath);
+    const durationMs = Math.round(durationInSeconds * 1000);
+    console.log(`[DURATION] 🎵 Audio file duration: ${durationMs}ms (${durationInSeconds.toFixed(2)}s)`);
+    return durationMs;
+  } catch (error) {
+    console.error(`[DURATION] ❌ Failed to get audio duration for ${audioPath}:`, error);
+    // Fallback: estimate based on text length (rough approximation)
+    const estimatedMs = 3000; // Default fallback
+    console.log(`[DURATION] ⚠️ Using fallback duration: ${estimatedMs}ms`);
+    return estimatedMs;
+  }
+}
+
+/**
+ * Scale mock viseme timings to match actual audio duration
+ * @param {Array} mockVisemes - Array of mock viseme objects with timeMs property
+ * @param {number} actualDurationMs - Actual audio duration in milliseconds
+ * @returns {Array} Scaled viseme array matching audio duration
+ */
+function generateDurationMatchedVisemes(mockVisemes, actualDurationMs) {
+  if (!mockVisemes || mockVisemes.length === 0) {
+    console.warn('[DURATION] ⚠️ No mock visemes provided for scaling');
+    return [];
+  }
+
+  // Find the last viseme's end time (timeMs + duration) to determine mock duration
+  const lastViseme = mockVisemes[mockVisemes.length - 1];
+  const mockDurationMs = lastViseme.timeMs + (lastViseme.duration || 0);
+  
+  console.log(`[DURATION] 📏 Mock duration: ${mockDurationMs}ms, Actual duration: ${actualDurationMs}ms`);
+  
+  if (mockDurationMs <= 0) {
+    console.error('[DURATION] ❌ Invalid mock duration, returning original visemes');
+    return mockVisemes;
+  }
+
+  // Calculate scaling factor
+  const scaleFactor = actualDurationMs / mockDurationMs;
+  console.log(`[DURATION] 📐 Scaling factor: ${scaleFactor.toFixed(3)}`);
+
+  // Scale all viseme timings
+  const scaledVisemes = mockVisemes.map((viseme, index) => {
+    const scaledTimeMs = Math.round(viseme.timeMs * scaleFactor);
+    const scaledDuration = Math.round((viseme.duration || 50) * scaleFactor);
+    
+    return {
+      ...viseme,
+      timeMs: scaledTimeMs,
+      duration: scaledDuration
+    };
+  });
+
+  // Validation - ensure we don't exceed actual audio duration
+  const maxAllowedTime = actualDurationMs - 50; // Leave small buffer
+  const validatedVisemes = scaledVisemes.filter(v => v.timeMs <= maxAllowedTime);
+  
+  if (validatedVisemes.length !== scaledVisemes.length) {
+    console.warn(`[DURATION] ⚠️ Filtered ${scaledVisemes.length - validatedVisemes.length} visemes that exceeded audio duration`);
+  }
+
+  console.log(`[DURATION] ✅ Duration matching complete: ${validatedVisemes.length} visemes scaled to ${actualDurationMs}ms`);
+  console.log(`[DURATION] First scaled viseme:`, validatedVisemes[0]);
+  console.log(`[DURATION] Last scaled viseme:`, validatedVisemes[validatedVisemes.length - 1]);
+  
+  return validatedVisemes;
 }
 
 /**
