@@ -244,6 +244,12 @@ function generateMockVisemes(text) {
     duration: 100
   });
 
+  // Validation and cleanup
+  const validVisemes = visemes.filter(v => v.visemeId >= 0 && v.visemeId <= 21 && v.timeMs >= 0);
+  if (validVisemes.length !== visemes.length) {
+    console.warn(`[VISEME] ⚠️ Filtered ${visemes.length - validVisemes.length} invalid visemes`);
+  }
+
   // Ensure we have at least a minimum sequence
   if (visemes.length <= 2) { // If we only have initial and final silence
     visemes.push({
@@ -254,11 +260,14 @@ function generateMockVisemes(text) {
   }
 
   // Detailed logging for debugging
-  console.log(`[VISEME] Enhanced generator created ${visemes.length} visemes for "${text.substring(0, 30)}..." spanning ${currentTime}ms`);
-  console.log(`[VISEME] First 3 visemes:`, visemes.slice(0, 3));
-  console.log(`[VISEME] Last 3 visemes:`, visemes.slice(-3));
+  console.log(`[VISEME] 📊 Enhanced generator for text length: ${text.length} chars`);
+  console.log(`[VISEME] 📊 Created ${validVisemes.length} visemes spanning ${currentTime}ms (${(currentTime/1000).toFixed(2)}s)`);
+  console.log(`[VISEME] 📊 Words processed: ${words.length}`);
+  console.log(`[VISEME] First 3 visemes:`, validVisemes.slice(0, 3));
+  console.log(`[VISEME] Last 3 visemes:`, validVisemes.slice(-3));
+  console.log(`[VISEME] Time distribution: every ${(currentTime/validVisemes.length).toFixed(1)}ms average`);
   
-  return visemes;
+  return validVisemes;
 }
 
 /**
