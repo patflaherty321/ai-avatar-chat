@@ -543,7 +543,7 @@ function App() {
     } else {
       console.warn('⚠️ Speech recognition not supported in this browser');
     }
-  }, [sendMessageToAI, isInTeams]);
+  }, [sendMessageToAI, isInTeams, audioEnabled, enableAudio]);
 
   const sendMessage = useCallback(async () => {
     console.log('📝 sendMessage called with inputMessage:', inputMessage);
@@ -677,7 +677,7 @@ function App() {
         setIsMicActive(false);
       }
     }
-  }, [recognition, enableAudio, isListening, isInTeams, isTeamsInitialized]);
+  }, [recognition, enableAudio, isListening, isInTeams, isTeamsInitialized, audioEnabled]);
 
   return (
     <div className="App">
