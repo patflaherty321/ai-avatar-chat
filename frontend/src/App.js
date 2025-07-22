@@ -143,7 +143,7 @@ function App() {
 
   const enableAudio = useCallback(async () => {
     try {
-      console.log('🔊 Attempting to enable audio...');
+      console.log('🔊 Attempting to enable audio with mobile-first approach...');
       
       // Mobile-specific audio enablement with more aggressive approach
       const audioPromise = new Promise(async (resolve, reject) => {
@@ -204,32 +204,35 @@ function App() {
             tryPlay(audio2, 'Secondary-Immediate');
           }, 100);
           
-          // Fallback timeout - consider it enabled even if silent play fails
+          // Fallback timeout - consider it enabled even if silent play fails (MOBILE FIX)
           setTimeout(() => {
             console.log('🔊 Audio enablement timeout - continuing anyway for mobile compatibility');
             resolveOnce(true);
-          }, 1500);
+          }, 800); // Reduced from 1500ms for faster mobile response
           
         } catch (error) {
           reject(error);
         }
       });
       
-      // Shorter timeout for mobile responsiveness
+      // Much shorter timeout for mobile responsiveness
       const timeoutPromise = new Promise((resolve) => {
         setTimeout(() => {
           console.warn('⏰ Audio enablement timed out - enabling anyway for mobile');
           resolve(true);
-        }, 2000);
+        }, 1000); // Reduced from 2000ms
       });
       
       await Promise.race([audioPromise, timeoutPromise]);
       
+      // FORCE audio enabled for mobile - always set true regardless of silent audio success
       setAudioEnabled(true);
-      console.log('✅ Audio enabled for mobile compatibility');
+      console.log('✅ Audio enabled for mobile compatibility (FORCED for mobile browsers)');
     } catch (error) {
       console.warn('❌ Could not enable audio:', error);
-      setAudioEnabled(true); // Always enable for mobile compatibility
+      // CRITICAL: Always enable for mobile compatibility even if silent audio fails
+      setAudioEnabled(true); 
+      console.log('🔊 Audio force-enabled despite error for mobile compatibility');
     }
   }, []);
 
@@ -249,11 +252,13 @@ function App() {
       // Always request audio if user has interacted with the app (mobile fix)
       const requestBody = {
         message: messageText,
-        includeAudio: audioEnabled || true, // Force audio request for mobile compatibility
-        userAgent: navigator.userAgent // Send user agent for mobile detection
+        includeAudio: true, // FORCE audio request for all devices (mobile fix)
+        userAgent: navigator.userAgent, // Send user agent for mobile detection
+        mobileForceAudio: true // Explicit mobile flag
       };
       
-      console.log('📤 Request body:', requestBody);
+      console.log('📤 Request body (mobile-enhanced):', requestBody);
+      console.log('🔍 MOBILE DEBUG - Current audioEnabled state:', audioEnabled);
       
       const response = await fetch(`${backendUrl}/api/chat`, {
         method: 'POST',
@@ -273,27 +278,34 @@ function App() {
 
       const data = await response.json();
       console.log('✅ API Response data:', data);
-      console.log('🔍 FORCE DEBUG - Audio/Viseme check:', {
+      console.log('🔍 MOBILE AUDIO DEBUG - Response analysis:', {
         audioEnabled,
         hasAudioUrl: !!data.audioUrl,
         hasVisemeData: !!data.visemes,
         audioUrl: data.audioUrl,
         visemeDataLength: data.visemes?.length,
         visemeDataType: typeof data.visemes,
-        visemeDataValue: data.visemes
+        visemeDataValue: data.visemes,
+        userAgent: navigator.userAgent,
+        isMobile: /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent),
+        responseKeys: Object.keys(data)
       });
       
       // Add AI response to chat
       const aiMessage = { role: 'assistant', content: data.response || data.text || data.message };
       setMessages(prev => [...prev, aiMessage]);
 
-      // Check if response includes audio and visemes (new format from our backend)
-      // Always process audio if available, since user has already enabled it by sending a message
+      // Check if response includes audio and visemes - MOBILE ENHANCED
+      // Process audio for mobile even if audioEnabled check fails
+      const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      const forceAudioProcessing = isMobile; // Force audio processing on mobile devices
+      
       if (data.audioUrl && data.visemes) {
         try {
-          console.log('🎵 Processing response with audio and visemes...');
+          console.log('🎵 Processing response with audio and visemes (mobile-enhanced)...');
           console.log('🎵 Audio URL:', data.audioUrl);
           console.log('🎵 Viseme data count:', data.visemes?.length || 0);
+          console.log('🎵 Mobile device detected:', isMobile);
           
           // Create full audio URL from relative path
           const backendUrl = process.env.REACT_APP_BACKEND_URL || 'https://ai-avatar-chat-backend.onrender.com';
@@ -305,7 +317,7 @@ function App() {
             visemeId: viseme.visemeId
           }));
           
-          console.log('🎵 Setting audio and visemes:', fullAudioUrl, convertedVisemes.length, 'visemes');
+          console.log('🎵 Setting audio and visemes (mobile-optimized):', fullAudioUrl, convertedVisemes.length, 'visemes');
           setAudioUrl(fullAudioUrl);
           setVisemes(convertedVisemes);
           setIsPlaying(true);
@@ -317,11 +329,11 @@ function App() {
           }, lastVisemeTime + 1000);
           
         } catch (audioError) {
-          console.error('❌ Error processing audio/visemes:', audioError);
+          console.error('❌ Error processing audio/visemes (mobile):', audioError);
         }
       } else {
-        console.log('💬 No audio/visemes in response - text-only chat mode');
-        console.log('🔍 Detailed debugging:', {
+        console.log('💬 No audio/visemes in response - checking mobile debugging...');
+        console.log('🔍 MOBILE DETAILED DEBUG:', {
           audioEnabled: audioEnabled,
           audioEnabledType: typeof audioEnabled,
           hasAudioUrl: !!data.audioUrl,
@@ -331,6 +343,8 @@ function App() {
           audioUrl: data.audioUrl || 'none',
           visemeDataLength: data.visemes?.length || 0,
           responseKeys: Object.keys(data),
+          isMobileDevice: isMobile,
+          shouldForceAudio: forceAudioProcessing,
           conditionResults: {
             audioEnabled_check: !!audioEnabled,
             audioUrl_check: !!data.audioUrl,
