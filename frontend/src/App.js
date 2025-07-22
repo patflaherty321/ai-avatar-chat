@@ -410,19 +410,29 @@ function App() {
       
       recognitionInstance.onresult = (event) => {
         const transcript = event.results[0][0].transcript;
+        
+        // Mobile debugging for speech result
+        const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        console.log('🗣️ === MOBILE SPEECH RESULT DEBUG ===');
         console.log('🗣️ Speech recognition result:', transcript);
+        console.log('🗣️ Mobile device:', isMobile);
+        console.log('🗣️ Current audioEnabled:', audioEnabled);
         
         // Process speech input with proper audio enabling (same as typed input)
         if (transcript.trim()) {
-          console.log('🔊 Microphone input - enabling audio for full audio+viseme response...');
+          console.log('🔊 MOBILE: Microphone input - enabling audio for full audio+viseme response...');
           
           // Enable audio on microphone interaction (same logic as sendMessage)
           if (!audioEnabled) {
-            console.log('🔊 First microphone interaction - enabling audio immediately...');
+            console.log('🔊 MOBILE: First microphone interaction - enabling audio immediately...');
             setAudioEnabled(true); // Set immediately for faster response
-            enableAudio().catch(error => {
-              console.warn('🔇 Audio enabling failed but continuing:', error);
+            enableAudio().then(() => {
+              console.log('🔊 MOBILE SUCCESS: Audio enabled after speech');
+            }).catch(error => {
+              console.warn('🔇 MOBILE WARNING: Audio enabling failed but continuing:', error);
             });
+          } else {
+            console.log('🔊 MOBILE: Audio already enabled for speech input');
           }
           
           // Add user message to chat immediately
@@ -430,6 +440,8 @@ function App() {
           setMessages(prev => [...prev, userMessage]);
           
           // Send to AI backend with audio enabled
+          console.log('🚀 MOBILE: Sending microphone input to AI...');
+          console.log('🚀 MOBILE: Final audioEnabled state:', audioEnabled);
           sendMessageToAI(transcript);
         }
         
@@ -526,7 +538,12 @@ function App() {
   }, [sendMessage]);
 
   const toggleMicrophone = useCallback(async () => {
+    // Mobile debugging
+    const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    console.log('🎤 === MOBILE MICROPHONE START ===');
     console.log('🎤 toggleMicrophone called, recognition available:', !!recognition, 'Teams initialized:', isTeamsInitialized);
+    console.log('🎤 Mobile device detected:', isMobile);
+    console.log('🎤 Current audioEnabled:', audioEnabled);
     
     // Block speech recognition in Teams completely
     if (isInTeams) {
@@ -542,12 +559,12 @@ function App() {
     }
 
     // Force enable audio on microphone interaction (critical for mobile and Teams)
-    console.log('🔊 Microphone interaction - force enabling audio for Teams/mobile...');
+    console.log('🔊 MOBILE: Microphone interaction - force enabling audio...');
     setAudioEnabled(true); // Set immediately
     
     // Force audio enablement in the background without waiting
     enableAudio().then(() => {
-      console.log('✅ Audio enablement completed during microphone interaction');
+      console.log('✅ MOBILE: Audio enablement completed during microphone interaction');
     }).catch(error => {
       console.warn('🔇 Audio enabling failed but continuing (Teams/mobile compatibility):', error);
     });
