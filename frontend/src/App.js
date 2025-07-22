@@ -377,15 +377,16 @@ function App() {
       recognitionInstance.continuous = false;
       recognitionInstance.interimResults = false;
       
-      // For regular browsers, use standard language settings
-      const languagesToTry = ['en-US', 'en'];
+      // For mobile browsers (especially Edge), be more flexible with language settings
+      const isMobileEdge = /Android.*Edg/i.test(navigator.userAgent);
+      const languagesToTry = isMobileEdge ? ['en', 'en-US'] : ['en-US', 'en'];
       let langSet = false;
       
       for (const lang of languagesToTry) {
         try {
           recognitionInstance.lang = lang;
           langSet = true;
-          console.log(`✅ Speech recognition language set to: "${lang}"`);
+          console.log(`✅ Speech recognition language set to: "${lang}" (Mobile Edge: ${isMobileEdge})`);
           break;
         } catch (error) {
           console.warn(`⚠️ Failed to set language to "${lang}":`, error);
@@ -393,7 +394,8 @@ function App() {
       }
       
       if (!langSet) {
-        console.warn('⚠️ Could not set any language, using default');
+        console.warn('⚠️ Could not set any language, using browser default');
+        // Don't set language at all for maximum compatibility
       }
       
       recognitionInstance.onstart = () => {
