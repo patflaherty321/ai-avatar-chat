@@ -318,9 +318,54 @@ function App() {
           }));
           
           console.log('🎵 Setting audio and visemes (mobile-optimized):', fullAudioUrl, convertedVisemes.length, 'visemes');
-          setAudioUrl(fullAudioUrl);
-          setVisemes(convertedVisemes);
-          setIsPlaying(true);
+          
+          // MOBILE FIX: Pre-load audio aggressively on mobile devices
+          if (isMobile) {
+            console.log('📱 MOBILE AUDIO FIX: Pre-loading audio for mobile compatibility...');
+            try {
+              // Create a hidden audio element to pre-load and test playback
+              const testAudio = new Audio(fullAudioUrl);
+              testAudio.preload = 'auto';
+              testAudio.volume = 0.01; // Very low volume for test
+              
+              // Try to play a tiny bit to "unlock" audio on mobile
+              const playPromise = testAudio.play();
+              if (playPromise !== undefined) {
+                playPromise.then(() => {
+                  console.log('📱 MOBILE AUDIO SUCCESS: Test audio play successful');
+                  testAudio.pause();
+                  testAudio.currentTime = 0;
+                  
+                  // Now set the actual audio for the avatar
+                  setAudioUrl(fullAudioUrl);
+                  setVisemes(convertedVisemes);
+                  setIsPlaying(true);
+                }).catch((error) => {
+                  console.warn('📱 MOBILE AUDIO WARNING: Test play failed, trying direct set:', error);
+                  // Fallback to direct setting
+                  setAudioUrl(fullAudioUrl);
+                  setVisemes(convertedVisemes);
+                  setIsPlaying(true);
+                });
+              } else {
+                // Old browser support
+                setAudioUrl(fullAudioUrl);
+                setVisemes(convertedVisemes);
+                setIsPlaying(true);
+              }
+            } catch (mobileAudioError) {
+              console.error('📱 MOBILE AUDIO ERROR: Mobile audio fix failed:', mobileAudioError);
+              // Fallback to normal behavior
+              setAudioUrl(fullAudioUrl);
+              setVisemes(convertedVisemes);
+              setIsPlaying(true);
+            }
+          } else {
+            // Desktop behavior (working fine)
+            setAudioUrl(fullAudioUrl);
+            setVisemes(convertedVisemes);
+            setIsPlaying(true);
+          }
           
           // Reset playing state after audio duration (estimated from last viseme)
           const lastVisemeTime = convertedVisemes[convertedVisemes.length - 1]?.timeMs || 3000;
