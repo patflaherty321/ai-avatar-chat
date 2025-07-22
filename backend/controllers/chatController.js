@@ -437,22 +437,7 @@ function generateDurationMatchedVisemes(mockVisemes, actualDurationMs) {
  */
 async function handleChatMessage(req, res) {
   try {
-    const { message, includeAudio, mobileForceAudio } = req.body;
-    
-    // Enhanced mobile request detection and logging
-    const userAgent = req.get('User-Agent') || '';
-    const isMobileUserAgent = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
-    const mobileDebugHeaders = {
-      userAgent: userAgent,
-      referer: req.get('Referer'),
-      origin: req.get('Origin'),
-      acceptEncoding: req.get('Accept-Encoding')
-    };
-    
-    console.log(`[MOBILE BACKEND] === REQUEST DEBUG ===`);
-    console.log(`[MOBILE BACKEND] Mobile User-Agent detected: ${isMobileUserAgent}`);
-    console.log(`[MOBILE BACKEND] Request body:`, { message: message?.substring(0, 50), includeAudio, mobileForceAudio });
-    console.log(`[MOBILE BACKEND] Headers:`, mobileDebugHeaders);
+    const { message } = req.body;
 
     if (!message || typeof message !== 'string') {
       return res.status(400).json({
@@ -462,14 +447,13 @@ async function handleChatMessage(req, res) {
     }
 
     console.log(`[CHAT] Received message: ${message.substring(0, 50)}...`);
-    console.log(`[MOBILE BACKEND] Include audio requested: ${includeAudio}, Mobile force: ${mobileForceAudio}`);
 
     // Generate AI response
     console.log('[CHAT] Generating AI response...');
     const aiResponse = await generateAIResponse(message);
     console.log(`[CHAT] AI response: ${aiResponse.substring(0, 50)}...`);
 
-    // ALWAYS generate speech and visemes (as confirmed working by user)
+    // Generate speech and visemes
     console.log('[CHAT] Generating speech and visemes...');
     const { audioFilename, visemes } = await textToSpeechWithVisemes(aiResponse);
     
@@ -481,12 +465,6 @@ async function handleChatMessage(req, res) {
     };
 
     console.log(`[CHAT] Response ready with ${visemes.length} visemes`);
-    console.log(`[MOBILE BACKEND] === RESPONSE DEBUG ===`);
-    console.log(`[MOBILE BACKEND] Sending audio URL: ${response.audioUrl}`);
-    console.log(`[MOBILE BACKEND] Sending ${visemes.length} visemes`);
-    console.log(`[MOBILE BACKEND] First 3 visemes:`, visemes.slice(0, 3));
-    console.log(`[MOBILE BACKEND] Response success: ${response.success}`);
-    
     res.json(response);
 
   } catch (error) {
