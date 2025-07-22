@@ -300,6 +300,8 @@ function App() {
       const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       const forceAudioProcessing = isMobile; // Force audio processing on mobile devices
       
+      // MOBILE FIX: Always process audio/visemes if available, regardless of audioEnabled state
+      // This fixes the race condition where audioEnabled state hasn't updated yet on mobile microphone input
       if (data.audioUrl && data.visemes) {
         try {
           console.log('🎵 Processing response with audio and visemes (mobile-enhanced)...');
@@ -390,11 +392,11 @@ function App() {
           responseKeys: Object.keys(data),
           isMobileDevice: isMobile,
           shouldForceAudio: forceAudioProcessing,
-          conditionResults: {
-            audioEnabled_check: !!audioEnabled,
+          newConditionResults: {
             audioUrl_check: !!data.audioUrl,
             visemeData_check: !!data.visemes,
-            overallCondition: !!(audioEnabled && data.audioUrl && data.visemes)
+            overallCondition_NEW: !!(data.audioUrl && data.visemes),
+            note: 'audioEnabled check removed to fix mobile race condition'
           }
         });
       }
