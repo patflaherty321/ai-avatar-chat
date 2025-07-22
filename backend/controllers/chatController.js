@@ -34,6 +34,7 @@ const fs = require('fs-extra');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 const getAudioDurationInSeconds = require('mp3-duration');
+const sdk = require('microsoft-cognitiveservices-speech-sdk');
 
 // Initialize OpenAI client
 let openaiClient = null;
@@ -73,7 +74,7 @@ async function generateAIResponse(message) {
 }
 
 /**
- * Convert text to speech using Azure TTS with viseme data
+ * Convert text to speech using Azure Speech SDK with REAL viseme data
  */
 async function textToSpeechWithVisemes(text) {
   if (!AZURE_SPEECH_KEY || !AZURE_SPEECH_REGION || 
@@ -82,71 +83,151 @@ async function textToSpeechWithVisemes(text) {
     throw new Error('Azure Speech Service not configured');
   }
 
-  try {
-    // Create SSML with viseme events
-    const ssml = `
-      <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" 
-             xmlns:mstts="http://www.w3.org/2001/mstts" xml:lang="en-US">
-        <voice name="en-US-EchoTurboMultilingualNeural">
-          <mstts:viseme type="redlips_front"/>
-          ${text}
-        </voice>
-      </speak>
-    `;
+  return new Promise((resolve, reject) => {
+    try {
+      // Create speech config
+      const speechConfig = sdk.SpeechConfig.fromSubscription(AZURE_SPEECH_KEY, AZURE_SPEECH_REGION);
+      speechConfig.speechSynthesisOutputFormat = sdk.SpeechSynthesisOutputFormat.Audio24Khz160KBitRateMonoMp3;
+      speechConfig.speechSynthesisVoiceName = "en-US-EchoTurboMultilingualNeural";
 
-    // Get access token
-    const tokenResponse = await axios.post(
-      `https://${AZURE_SPEECH_REGION}.api.cognitive.microsoft.com/sts/v1.0/issueToken`,
-      null,
-      {
-        headers: {
-          'Ocp-Apim-Subscription-Key': AZURE_SPEECH_KEY,
-          'Content-Type': 'application/x-www-form-urlencoded'
-        }
-      }
-    );
+      // Create SSML with viseme events enabled
+      const ssml = `
+        <speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" 
+               xmlns:mstts="http://www.w3.org/2001/mstts" xml:lang="en-US">
+          <voice name="en-US-EchoTurboMultilingualNeural">
+            <mstts:viseme type="redlips_front"/>
+            ${text}
+          </voice>
+        </speak>
+      `;
 
-    const accessToken = tokenResponse.data;
+      // Create synthesizer
+      const synthesizer = new sdk.SpeechSynthesizer(speechConfig);
 
-    // Generate speech with viseme data
-    const speechResponse = await axios.post(
-      `https://${AZURE_SPEECH_REGION}.tts.speech.microsoft.com/cognitiveservices/v1`,
-      ssml,
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/ssml+xml',
-          'X-Microsoft-OutputFormat': 'audio-24khz-160kbitrate-mono-mp3',
-          'User-Agent': 'AI-Avatar-Chat'
+      // Arrays to collect real Azure viseme data
+      const realVisemes = [];
+      let audioData = null;
+
+      // Listen for viseme events (REAL DATA FROM AZURE!)
+      synthesizer.visemeReceived = function (s, e) {
+        console.log(`[REAL VISEME] 🎯 Received: visemeId=${e.visemeId}, time=${e.audioOffset / 10000}ms`);
+        realVisemes.push({
+          visemeId: e.visemeId,
+          timeMs: Math.round(e.audioOffset / 10000), // Convert from 100ns units to milliseconds
+          duration: 50 // Default duration, will be calculated properly
+        });
+      };
+
+      // Synthesize speech with REAL viseme data
+      synthesizer.speakSsmlAsync(
+        ssml,
+        async function (result) {
+          try {
+            if (result.reason === sdk.ResultReason.SynthesizingAudioCompleted) {
+              console.log(`[REAL VISEME] ✅ Synthesis completed with ${realVisemes.length} real visemes`);
+              
+              // Save audio file
+              const audioFilename = `echo_${Date.now()}_${uuidv4().substring(0, 8)}.mp3`;
+              const audioPath = path.join(__dirname, '..', 'audio', audioFilename);
+              
+              await fs.writeFile(audioPath, Buffer.from(result.audioData));
+              console.log(`[REAL VISEME] 💾 Audio saved: ${audioFilename}`);
+
+              // Process real visemes for proper duration calculation
+              const processedVisemes = processRealVisemes(realVisemes);
+              
+              // Get actual audio duration for validation
+              const actualDurationMs = await getAudioDurationMs(audioPath);
+              console.log(`[REAL VISEME] ⏱️ Audio duration: ${actualDurationMs}ms`);
+              console.log(`[REAL VISEME] 📊 Viseme span: 0ms to ${processedVisemes[processedVisemes.length - 1]?.timeMs || 0}ms`);
+
+              synthesizer.close();
+              resolve({
+                audioFilename,
+                audioPath,
+                visemes: processedVisemes
+              });
+
+            } else {
+              console.error(`[REAL VISEME] ❌ Synthesis failed: ${result.errorDetails}`);
+              synthesizer.close();
+              reject(new Error(`Speech synthesis failed: ${result.errorDetails}`));
+            }
+          } catch (error) {
+            console.error('[REAL VISEME] ❌ Processing error:', error);
+            synthesizer.close();
+            reject(error);
+          }
         },
-        responseType: 'arraybuffer'
-      }
-    );
+        function (error) {
+          console.error('[REAL VISEME] ❌ Synthesis error:', error);
+          synthesizer.close();
+          reject(new Error(`Speech synthesis error: ${error}`));
+        }
+      );
 
-    // Save audio file
-    const audioFilename = `echo_${Date.now()}_${uuidv4().substring(0, 8)}.mp3`;
-    const audioPath = path.join(__dirname, '..', 'audio', audioFilename);
-    
-    await fs.writeFile(audioPath, speechResponse.data);
+    } catch (error) {
+      console.error('[REAL VISEME] ❌ Setup error:', error);
+      reject(new Error(`Failed to setup speech synthesis: ${error.message}`));
+    }
+  });
+}
 
-    // Generate mock viseme data (Azure Speech SDK would provide real visemes)
-    // For now, we'll create estimated viseme timings
-    const mockVisemes = generateMockVisemes(text);
-    
-    // Get actual audio duration and scale visemes to match
-    const actualDurationMs = await getAudioDurationMs(audioPath);
-    const visemes = generateDurationMatchedVisemes(mockVisemes, actualDurationMs);
-
-    return {
-      audioFilename,
-      audioPath,
-      visemes
-    };
-
-  } catch (error) {
-    console.error('Azure TTS error:', error);
-    throw new Error('Failed to generate speech with visemes');
+/**
+ * Process real Azure visemes for proper duration and timing
+ * @param {Array} realVisemes - Real viseme data from Azure Speech SDK
+ * @returns {Array} Processed viseme array with proper durations
+ */
+function processRealVisemes(realVisemes) {
+  if (!realVisemes || realVisemes.length === 0) {
+    console.warn('[REAL VISEME] ⚠️ No real visemes received, creating fallback');
+    return [{
+      visemeId: 0,
+      timeMs: 0,
+      duration: 100
+    }];
   }
+
+  // Sort by time to ensure proper order
+  realVisemes.sort((a, b) => a.timeMs - b.timeMs);
+
+  // Calculate durations based on gaps between visemes
+  for (let i = 0; i < realVisemes.length - 1; i++) {
+    const currentViseme = realVisemes[i];
+    const nextViseme = realVisemes[i + 1];
+    
+    // Duration is the time until next viseme (minimum 30ms, maximum 200ms)
+    const calculatedDuration = Math.max(30, Math.min(200, nextViseme.timeMs - currentViseme.timeMs));
+    currentViseme.duration = calculatedDuration;
+  }
+
+  // Last viseme gets a default duration
+  if (realVisemes.length > 0) {
+    realVisemes[realVisemes.length - 1].duration = 100;
+  }
+
+  // Add initial silence if first viseme doesn't start at 0
+  if (realVisemes[0]?.timeMs > 0) {
+    realVisemes.unshift({
+      visemeId: 0,
+      timeMs: 0,
+      duration: realVisemes[0].timeMs
+    });
+  }
+
+  // Add final silence
+  const lastViseme = realVisemes[realVisemes.length - 1];
+  realVisemes.push({
+    visemeId: 0,
+    timeMs: lastViseme.timeMs + lastViseme.duration,
+    duration: 100
+  });
+
+  console.log(`[REAL VISEME] 📊 Processed ${realVisemes.length} real visemes`);
+  console.log(`[REAL VISEME] First 3:`, realVisemes.slice(0, 3));
+  console.log(`[REAL VISEME] Last 3:`, realVisemes.slice(-3));
+  
+  return realVisemes;
 }
 
 /**
