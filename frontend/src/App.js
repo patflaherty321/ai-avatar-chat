@@ -21,6 +21,7 @@ function App() {
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1200);
   const [isInTeams, setIsInTeams] = useState(false);
   const [isTeamsInitialized, setIsTeamsInitialized] = useState(false);
+  const [micPermissionStatus, setMicPermissionStatus] = useState('unknown'); // 'granted', 'denied', 'prompt', 'unknown'
 
   // Ref for auto-scrolling chat messages
   const messagesEndRef = useRef(null);
@@ -140,6 +141,39 @@ function App() {
 
     initializeTeams();
   }, []);
+
+  // Check microphone permission status
+  const checkMicrophonePermission = useCallback(async () => {
+    if (isInTeams) {
+      setMicPermissionStatus('teams-blocked');
+      return;
+    }
+
+    try {
+      if (navigator.permissions && navigator.permissions.query) {
+        const permission = await navigator.permissions.query({ name: 'microphone' });
+        console.log('🎤 Permission status:', permission.state);
+        setMicPermissionStatus(permission.state);
+        
+        // Listen for permission changes
+        permission.onchange = () => {
+          console.log('🎤 Permission changed to:', permission.state);
+          setMicPermissionStatus(permission.state);
+        };
+      } else {
+        // Fallback for browsers that don't support navigator.permissions
+        setMicPermissionStatus('unknown');
+      }
+    } catch (error) {
+      console.warn('🎤 Unable to check microphone permissions:', error);
+      setMicPermissionStatus('unknown');
+    }
+  }, [isInTeams]);
+
+  // Check permissions on mount
+  useEffect(() => {
+    checkMicrophonePermission();
+  }, [checkMicrophonePermission]);
 
   const enableAudio = useCallback(async () => {
     try {
@@ -641,29 +675,71 @@ function App() {
           }
         }
         
-        // Test actual microphone access with getUserMedia
+        // Enhanced mobile microphone permission handling
         try {
           console.log('🎤 Testing microphone access with getUserMedia...');
-          const stream = await navigator.mediaDevices.getUserMedia({ 
+          const isMobileDevice = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+          
+          // Mobile-optimized audio constraints
+          const audioConstraints = isMobileDevice ? {
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+              sampleRate: 16000, // Lower sample rate for mobile compatibility
+              channelCount: 1     // Mono for better mobile performance
+            }
+          } : {
             audio: { 
               echoCancellation: true,
               noiseSuppression: true,
               autoGainControl: true
-            } 
-          });
+            }
+          };
+          
+          const stream = await navigator.mediaDevices.getUserMedia(audioConstraints);
           console.log('✅ Microphone access granted via getUserMedia');
+          setMicPermissionStatus('granted'); // Update permission status
           
           // Stop the test stream immediately
           stream.getTracks().forEach(track => track.stop());
         } catch (getUserMediaError) {
           console.error('❌ getUserMedia failed:', getUserMediaError);
           
+          // Enhanced error handling with mobile-specific guidance
           if (getUserMediaError.name === 'NotAllowedError') {
-            alert('Microphone access denied. Please allow microphone permissions and try again.');
+            setMicPermissionStatus('denied'); // Update permission status
+            const isMobileDevice = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            let message = 'Microphone access denied. ';
+            
+            if (isMobileDevice) {
+              message += 'On mobile devices:\n\n';
+              message += '• Chrome: Tap the 🔒 lock icon in the address bar, then enable microphone\n';
+              message += '• Safari: Go to Settings > Safari > Camera & Microphone > Allow\n';
+              message += '• Edge: Tap the 🔒 icon and enable microphone permissions\n\n';
+              message += 'Then refresh the page and try again.';
+            } else {
+              message += 'Please click the microphone icon in your browser\'s address bar and allow access, then try again.';
+            }
+            
+            alert(message);
           } else if (getUserMediaError.name === 'NotFoundError') {
             alert('No microphone found. Please connect a microphone and try again.');
+          } else if (getUserMediaError.name === 'NotSupportedError') {
+            alert('Microphone access is not supported in this browser. Please use Chrome, Safari, or Edge.');
+          } else if (getUserMediaError.name === 'OverconstrainedError') {
+            console.log('🔄 Audio constraints too strict, trying simplified constraints...');
+            try {
+              // Fallback with simpler constraints
+              const simpleStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+              console.log('✅ Microphone access granted with simplified constraints');
+              simpleStream.getTracks().forEach(track => track.stop());
+            } catch (simpleError) {
+              alert('Microphone access failed with simplified settings. Please check your microphone permissions.');
+              return;
+            }
           } else {
-            alert('Microphone access failed. Please check your microphone settings.');
+            alert(`Microphone access failed: ${getUserMediaError.message}. Please check your microphone settings.`);
           }
           return;
         }
@@ -1100,24 +1176,51 @@ function App() {
                         alert('Speech recognition is not available in Microsoft Teams. Please use text input instead.');
                         return;
                       }
+                      if (micPermissionStatus === 'denied') {
+                        const isMobileDevice = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                        let message = 'Microphone access is currently denied. ';
+                        
+                        if (isMobileDevice) {
+                          message += 'On mobile devices:\n\n';
+                          message += '• Chrome: Tap the 🔒 lock icon in the address bar, then enable microphone\n';
+                          message += '• Safari: Go to Settings > Safari > Camera & Microphone > Allow\n';
+                          message += '• Edge: Tap the 🔒 icon and enable microphone permissions\n\n';
+                          message += 'Then refresh the page and try again.';
+                        } else {
+                          message += 'Please click the microphone icon in your browser\'s address bar and allow access, then refresh the page and try again.';
+                        }
+                        
+                        alert(message);
+                        return;
+                      }
                       console.log('🎤 Microphone button clicked');
                       toggleMicrophone();
                     }}
                     disabled={isInTeams}
+                    title={
+                      isInTeams ? 'Speech recognition not available in Teams' :
+                      micPermissionStatus === 'denied' ? 'Microphone access denied - click for help' :
+                      micPermissionStatus === 'granted' ? 'Microphone ready - click to start recording' :
+                      'Click to request microphone access'
+                    }
                     style={{
                       position: 'absolute',
-                      background: isInTeams ? '#CCCCCC' : (isListening ? '#FF3B30' : '#FFFFFF'),
+                      background: isInTeams ? '#CCCCCC' : 
+                                 micPermissionStatus === 'denied' ? '#FFA500' :
+                                 (isListening ? '#FF3B30' : '#FFFFFF'),
                       left: 0,
                       top: 0,
                       borderRadius: 24,
                       width: 48,
                       height: 48,
-                      border: 'none',
+                      border: micPermissionStatus === 'denied' ? '2px solid #FF6B35' : 'none',
                       cursor: isInTeams ? 'not-allowed' : 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      boxShadow: isInTeams ? 'none' : (isListening ? '0 4px 12px rgba(255, 59, 48, 0.3)' : '0 2px 4px rgba(0,0,0,0.1)'),
+                      boxShadow: isInTeams ? 'none' : 
+                                micPermissionStatus === 'denied' ? '0 4px 12px rgba(255, 107, 53, 0.4)' :
+                                (isListening ? '0 4px 12px rgba(255, 59, 48, 0.3)' : '0 2px 4px rgba(0,0,0,0.1)'),
                       transition: 'all 0.2s ease',
                       transform: (isListening && !isInTeams) ? 'scale(1.1)' : 'scale(1)',
                       overflow: 'hidden', // Ensure the pulse animation is masked by the circular button
@@ -1150,18 +1253,37 @@ function App() {
                       xmlns="http://www.w3.org/2000/svg"
                       style={{ position: 'relative', zIndex: 2 }}
                     >
+                      {/* Show warning icon when permission denied */}
+                      {micPermissionStatus === 'denied' && (
+                        <g transform="translate(18, 0)">
+                          <circle cx="2.5" cy="2.5" r="2.5" fill="#FF3B30"/>
+                          <text x="2.5" y="3.5" textAnchor="middle" fill="white" fontSize="3" fontWeight="bold">!</text>
+                        </g>
+                      )}
+                      
                       <path 
                         fillRule="evenodd" 
                         clipRule="evenodd" 
                         d="M17.7428 6.24286C17.7428 2.79501 14.9478 0 11.4999 0C8.05215 0 5.25714 2.79503 5.25714 6.24286V15.4428C5.25714 18.8907 8.05215 21.6857 11.4999 21.6857C14.9478 21.6857 17.7428 18.8907 17.7428 15.4428V6.24286ZM11.4999 1.97143C13.8591 1.97143 15.7714 3.88381 15.7714 6.24286V15.4428C15.7714 17.8018 13.8591 19.7143 11.4999 19.7143C9.14093 19.7143 7.22856 17.8018 7.22856 15.4428V6.24286C7.22856 3.88381 9.14093 1.97143 11.4999 1.97143Z" 
-                        fill={isListening ? "#FFFFFF" : "#33302E"}
+                        fill={isListening ? "#FFFFFF" : 
+                             micPermissionStatus === 'denied' ? "#8B4513" :
+                             isInTeams ? "#999999" : "#33302E"}
+                        opacity={micPermissionStatus === 'denied' ? 0.7 : 1}
                       />
                       <path 
                         fillRule="evenodd" 
                         clipRule="evenodd" 
                         d="M22.0142 9.19999C21.4698 9.19999 21.0285 9.64131 21.0285 10.1857V15.4428C21.0285 20.7053 16.7624 24.9714 11.4999 24.9714C6.23751 24.9714 1.97143 20.7053 1.97143 15.4428V10.1857C1.97143 9.64131 1.5301 9.19999 0.985708 9.19999C0.441311 9.19999 0 9.64131 0 10.1857V15.4428C0 21.7941 5.14872 26.9429 11.4999 26.9429C17.8512 26.9429 23 21.7941 23 15.4428V10.1857C23 9.64131 22.5587 9.19999 22.0142 9.19999Z" 
-                        fill={isListening ? "#FFFFFF" : "#33302E"}
+                        fill={isListening ? "#FFFFFF" : 
+                             micPermissionStatus === 'denied' ? "#8B4513" :
+                             isInTeams ? "#999999" : "#33302E"}
+                        opacity={micPermissionStatus === 'denied' ? 0.7 : 1}
                       />
+                      
+                      {/* Show strikethrough when denied */}
+                      {micPermissionStatus === 'denied' && (
+                        <line x1="2" y1="24" x2="21" y2="3" stroke="#FF3B30" strokeWidth="2.5" strokeLinecap="round"/>
+                      )}
                     </svg>
                   </button>
                 </div>
