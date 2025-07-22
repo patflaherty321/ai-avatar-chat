@@ -363,9 +363,17 @@ function App() {
   useEffect(() => {
     console.log('🎤 Initializing speech recognition...');
     
-    // Skip speech recognition entirely in Teams due to browser restrictions
+    // Skip speech recognition in Teams AND mobile devices due to browser restrictions
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    
     if (isInTeams) {
       console.log('🚫 Skipping speech recognition initialization in Teams environment');
+      setRecognition(null);
+      return;
+    }
+    
+    if (isMobile) {
+      console.log('🚫 Skipping speech recognition initialization on mobile devices for reliability');
       setRecognition(null);
       return;
     }
@@ -377,33 +385,12 @@ function App() {
       recognitionInstance.continuous = false;
       recognitionInstance.interimResults = false;
       
-      // Enhanced mobile browser compatibility - especially for Edge Mobile
-      const isMobileEdge = /Android.*Edg/i.test(navigator.userAgent);
-      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-      
-      // For Edge Mobile, don't set language at all to avoid language-not-supported errors
-      if (isMobileEdge) {
-        console.log(`🔧 Edge Mobile detected - skipping language setting for maximum compatibility`);
-        // Don't set recognitionInstance.lang at all for Edge Mobile
-      } else {
-        // For other browsers, try setting language
-        const languagesToTry = isMobile ? ['en', 'en-US'] : ['en-US', 'en'];
-        let langSet = false;
-        
-        for (const lang of languagesToTry) {
-          try {
-            recognitionInstance.lang = lang;
-            langSet = true;
-            console.log(`✅ Speech recognition language set to: "${lang}" (Mobile: ${isMobile}, Edge: ${isMobileEdge})`);
-            break;
-          } catch (error) {
-            console.warn(`⚠️ Failed to set language to "${lang}":`, error);
-          }
-        }
-        
-        if (!langSet) {
-          console.warn('⚠️ Could not set any language, using browser default');
-        }
+      // Desktop-only speech recognition with standard settings
+      try {
+        recognitionInstance.lang = 'en-US';
+        console.log('✅ Speech recognition language set to: "en-US" (Desktop only)');
+      } catch (error) {
+        console.warn('⚠️ Failed to set language to "en-US":', error);
       }
       
       recognitionInstance.onstart = () => {
@@ -438,58 +425,8 @@ function App() {
       
       recognitionInstance.onerror = (event) => {
         console.error('❌ Speech recognition error:', event.error, 'Type:', event.type);
-        
-        // Enhanced Edge Mobile error handling
-        const isMobileEdge = /Android.*Edg/i.test(navigator.userAgent);
-        
-        if (event.error === 'language-not-supported') {
-          console.log('🔄 Language error detected, attempting fallback approach...');
-          
-          // For Edge Mobile, create a new instance without any language settings
-          setTimeout(() => {
-            try {
-              const fallbackRecognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-              fallbackRecognition.continuous = false;
-              fallbackRecognition.interimResults = false;
-              
-              // Absolutely no language setting for maximum compatibility
-              console.log('🔄 Creating fallback recognition without language settings for Edge Mobile...');
-              
-              // Copy all the event handlers
-              fallbackRecognition.onstart = recognitionInstance.onstart;
-              fallbackRecognition.onresult = recognitionInstance.onresult;
-              fallbackRecognition.onend = recognitionInstance.onend;
-              
-              fallbackRecognition.onerror = (fallbackEvent) => {
-                console.error('❌ Fallback speech recognition also failed:', fallbackEvent.error);
-                setIsListening(false);
-                setIsMicActive(false);
-                
-                // Show user-friendly message for Edge Mobile
-                if (isMobileEdge) {
-                  alert('Voice recognition is not fully supported in Edge Mobile. Please try using Chrome or Safari, or use text input instead.');
-                }
-              };
-              
-              setRecognition(fallbackRecognition);
-              console.log('✅ Fallback speech recognition created for Edge Mobile');
-              
-              // Don't automatically start - let user try again
-              
-            } catch (fallbackError) {
-              console.error('❌ Could not create fallback recognition:', fallbackError);
-              setIsListening(false);
-              setIsMicActive(false);
-              
-              if (isMobileEdge) {
-                alert('Voice recognition is not supported in this version of Edge Mobile. Please try Chrome or Safari, or use text input instead.');
-              }
-            }
-          }, 1000);
-        } else {
-          setIsListening(false);
-          setIsMicActive(false);
-        }
+        setIsListening(false);
+        setIsMicActive(false);
       };
       
       recognitionInstance.onend = () => {
@@ -499,7 +436,7 @@ function App() {
       };
       
       setRecognition(recognitionInstance);
-      console.log('✅ Speech recognition initialized');
+      console.log('✅ Speech recognition initialized for desktop only');
     } else {
       console.warn('⚠️ Speech recognition not supported in this browser');
     }
@@ -543,12 +480,20 @@ function App() {
   }, [sendMessage]);
 
   const toggleMicrophone = useCallback(async () => {
-    console.log('🎤 toggleMicrophone called, recognition available:', !!recognition, 'Teams initialized:', isTeamsInitialized);
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     
-    // Block speech recognition in Teams completely
+    console.log('🎤 toggleMicrophone called, recognition available:', !!recognition, 'Teams:', isInTeams, 'Mobile:', isMobile);
+    
+    // Block speech recognition in Teams and mobile devices completely
     if (isInTeams) {
       console.log('🚫 Speech recognition blocked in Teams environment');
       alert('Speech recognition is not available in Microsoft Teams due to browser restrictions. Please use text input instead.');
+      return;
+    }
+    
+    if (isMobile) {
+      console.log('🚫 Speech recognition blocked on mobile devices');
+      alert('Speech recognition is not available on mobile devices for reliability. Please use text input instead.');
       return;
     }
     
@@ -1048,22 +993,32 @@ function App() {
                 }}>
                   <button 
                     onClick={() => {
+                      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+                      
                       if (isInTeams) {
                         console.log('🚫 Speech recognition disabled in Teams environment');
                         alert('Speech recognition is not available in Microsoft Teams. Please use text input instead.');
                         return;
                       }
+                      
+                      if (isMobile) {
+                        console.log('🚫 Speech recognition disabled on mobile devices');
+                        alert('Speech recognition is not available on mobile devices. Please use text input instead.');
+                        return;
+                      }
+                      
                       console.log('🎤 Microphone button clicked');
                       toggleMicrophone();
                     }}
-                    disabled={isInTeams}
+                    disabled={isInTeams || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)}
                     title={
                       isInTeams ? 'Speech recognition not available in Teams' :
+                      /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ? 'Speech recognition not available on mobile devices' :
                       'Click to start voice recording'
                     }
                     style={{
                       position: 'absolute',
-                      background: isInTeams ? '#CCCCCC' : 
+                      background: (isInTeams || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) ? '#CCCCCC' : 
                                  (isListening ? '#FF3B30' : '#FFFFFF'),
                       left: 0,
                       top: 0,
@@ -1071,20 +1026,20 @@ function App() {
                       width: 48,
                       height: 48,
                       border: 'none',
-                      cursor: isInTeams ? 'not-allowed' : 'pointer',
+                      cursor: (isInTeams || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) ? 'not-allowed' : 'pointer',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      boxShadow: isInTeams ? 'none' : 
+                      boxShadow: (isInTeams || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) ? 'none' : 
                                 (isListening ? '0 4px 12px rgba(255, 59, 48, 0.3)' : '0 2px 4px rgba(0,0,0,0.1)'),
                       transition: 'all 0.2s ease',
-                      transform: (isListening && !isInTeams) ? 'scale(1.1)' : 'scale(1)',
+                      transform: (isListening && !isInTeams && !/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) ? 'scale(1.1)' : 'scale(1)',
                       overflow: 'hidden',
-                      opacity: isInTeams ? 0.5 : 1
+                      opacity: (isInTeams || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) ? 0.5 : 1
                     }}
                   >
-                    {/* Pulsating background animation */}
-                    {(isMicActive || isListening) && !isInTeams && (
+                    {/* Pulsating background animation - only show on desktop */}
+                    {(isMicActive || isListening) && !isInTeams && !/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) && (
                       <div
                         style={{
                           position: 'absolute',
@@ -1114,14 +1069,14 @@ function App() {
                         clipRule="evenodd" 
                         d="M17.7428 6.24286C17.7428 2.79501 14.9478 0 11.4999 0C8.05215 0 5.25714 2.79503 5.25714 6.24286V15.4428C5.25714 18.8907 8.05215 21.6857 11.4999 21.6857C14.9478 21.6857 17.7428 18.8907 17.7428 15.4428V6.24286ZM11.4999 1.97143C13.8591 1.97143 15.7714 3.88381 15.7714 6.24286V15.4428C15.7714 17.8018 13.8591 19.7143 11.4999 19.7143C9.14093 19.7143 7.22856 17.8018 7.22856 15.4428V6.24286C7.22856 3.88381 9.14093 1.97143 11.4999 1.97143Z" 
                         fill={isListening ? "#FFFFFF" : 
-                             isInTeams ? "#999999" : "#33302E"}
+                             (isInTeams || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) ? "#999999" : "#33302E"}
                       />
                       <path 
                         fillRule="evenodd" 
                         clipRule="evenodd" 
                         d="M22.0142 9.19999C21.4698 9.19999 21.0285 9.64131 21.0285 10.1857V15.4428C21.0285 20.7053 16.7624 24.9714 11.4999 24.9714C6.23751 24.9714 1.97143 20.7053 1.97143 15.4428V10.1857C1.97143 9.64131 1.5301 9.19999 0.985708 9.19999C0.441311 9.19999 0 9.64131 0 10.1857V15.4428C0 21.7941 5.14872 26.9429 11.4999 26.9429C17.8512 26.9429 23 21.7941 23 15.4428V10.1857C23 9.64131 22.5587 9.19999 22.0142 9.19999Z" 
                         fill={isListening ? "#FFFFFF" : 
-                             isInTeams ? "#999999" : "#33302E"}
+                             (isInTeams || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) ? "#999999" : "#33302E"}
                       />
                     </svg>
                   </button>
