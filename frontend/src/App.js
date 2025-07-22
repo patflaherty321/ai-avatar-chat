@@ -377,25 +377,33 @@ function App() {
       recognitionInstance.continuous = false;
       recognitionInstance.interimResults = false;
       
-      // For mobile browsers (especially Edge), be more flexible with language settings
+      // Enhanced mobile browser compatibility - especially for Edge Mobile
       const isMobileEdge = /Android.*Edg/i.test(navigator.userAgent);
-      const languagesToTry = isMobileEdge ? ['en', 'en-US'] : ['en-US', 'en'];
-      let langSet = false;
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
       
-      for (const lang of languagesToTry) {
-        try {
-          recognitionInstance.lang = lang;
-          langSet = true;
-          console.log(`✅ Speech recognition language set to: "${lang}" (Mobile Edge: ${isMobileEdge})`);
-          break;
-        } catch (error) {
-          console.warn(`⚠️ Failed to set language to "${lang}":`, error);
+      // For Edge Mobile, don't set language at all to avoid language-not-supported errors
+      if (isMobileEdge) {
+        console.log(`🔧 Edge Mobile detected - skipping language setting for maximum compatibility`);
+        // Don't set recognitionInstance.lang at all for Edge Mobile
+      } else {
+        // For other browsers, try setting language
+        const languagesToTry = isMobile ? ['en', 'en-US'] : ['en-US', 'en'];
+        let langSet = false;
+        
+        for (const lang of languagesToTry) {
+          try {
+            recognitionInstance.lang = lang;
+            langSet = true;
+            console.log(`✅ Speech recognition language set to: "${lang}" (Mobile: ${isMobile}, Edge: ${isMobileEdge})`);
+            break;
+          } catch (error) {
+            console.warn(`⚠️ Failed to set language to "${lang}":`, error);
+          }
         }
-      }
-      
-      if (!langSet) {
-        console.warn('⚠️ Could not set any language, using browser default');
-        // Don't set language at all for maximum compatibility
+        
+        if (!langSet) {
+          console.warn('⚠️ Could not set any language, using browser default');
+        }
       }
       
       recognitionInstance.onstart = () => {
@@ -431,33 +439,51 @@ function App() {
       recognitionInstance.onerror = (event) => {
         console.error('❌ Speech recognition error:', event.error, 'Type:', event.type);
         
-        // If it's a language-not-supported error in Teams, try to reinitialize with different approach
-        if (event.error === 'language-not-supported' && isInTeams) {
-          console.log('🔄 Language error in Teams, trying to reinitialize with different settings...');
+        // Enhanced Edge Mobile error handling
+        const isMobileEdge = /Android.*Edg/i.test(navigator.userAgent);
+        
+        if (event.error === 'language-not-supported') {
+          console.log('🔄 Language error detected, attempting fallback approach...');
+          
+          // For Edge Mobile, create a new instance without any language settings
           setTimeout(() => {
             try {
-              // Try to create a new instance without explicitly setting language
               const fallbackRecognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
               fallbackRecognition.continuous = false;
               fallbackRecognition.interimResults = false;
               
-              // Don't set language at all - let browser choose
-              console.log('🔄 Attempting browser default language for speech recognition...');
+              // Absolutely no language setting for maximum compatibility
+              console.log('🔄 Creating fallback recognition without language settings for Edge Mobile...');
               
+              // Copy all the event handlers
+              fallbackRecognition.onstart = recognitionInstance.onstart;
               fallbackRecognition.onresult = recognitionInstance.onresult;
               fallbackRecognition.onend = recognitionInstance.onend;
+              
               fallbackRecognition.onerror = (fallbackEvent) => {
                 console.error('❌ Fallback speech recognition also failed:', fallbackEvent.error);
                 setIsListening(false);
                 setIsMicActive(false);
+                
+                // Show user-friendly message for Edge Mobile
+                if (isMobileEdge) {
+                  alert('Voice recognition is not fully supported in Edge Mobile. Please try using Chrome or Safari, or use text input instead.');
+                }
               };
               
               setRecognition(fallbackRecognition);
-              console.log('✅ Fallback speech recognition initialized without language setting');
+              console.log('✅ Fallback speech recognition created for Edge Mobile');
+              
+              // Don't automatically start - let user try again
+              
             } catch (fallbackError) {
               console.error('❌ Could not create fallback recognition:', fallbackError);
               setIsListening(false);
               setIsMicActive(false);
+              
+              if (isMobileEdge) {
+                alert('Voice recognition is not supported in this version of Edge Mobile. Please try Chrome or Safari, or use text input instead.');
+              }
             }
           }, 1000);
         } else {
