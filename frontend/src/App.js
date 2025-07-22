@@ -251,11 +251,13 @@ function App() {
       // Always request audio if user has interacted with the app (mobile fix)
       const requestBody = {
         message: messageText,
-        includeAudio: audioEnabled || true, // Force audio request for mobile compatibility
-        userAgent: navigator.userAgent // Send user agent for mobile detection
+        includeAudio: true, // Always true for simplicity
+        userAgent: navigator.userAgent, // Send user agent for mobile detection
+        isMobile: /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) // Explicit mobile flag
       };
       
       console.log('📤 Request body:', requestBody);
+      console.log('📱 Mobile device:', requestBody.isMobile);
       
       const response = await fetch(`${backendUrl}/api/chat`, {
         method: 'POST',
@@ -275,14 +277,15 @@ function App() {
 
       const data = await response.json();
       console.log('✅ API Response data:', data);
-      console.log('🔍 FORCE DEBUG - Audio/Viseme check:', {
-        audioEnabled,
+      console.log('🔍 Mobile Response Debug:', {
+        isMobile: /iPhone|iPad|iPod|Android/i.test(navigator.userAgent),
         hasAudioUrl: !!data.audioUrl,
-        hasVisemeData: !!data.visemes,
+        hasVisemes: !!data.visemes,
         audioUrl: data.audioUrl,
-        visemeDataLength: data.visemes?.length,
-        visemeDataType: typeof data.visemes,
-        visemeDataValue: data.visemes
+        visemeCount: data.visemes?.length || 0,
+        responseType: data.audioUrl ? 'AUDIO_RESPONSE' : 'TEXT_ONLY_RESPONSE',
+        audioEnabled: audioEnabled,
+        userAgent: navigator.userAgent.substring(0, 50) + '...'
       });
       
       // Add AI response to chat
@@ -299,7 +302,9 @@ function App() {
           
           // Create full audio URL from relative path
           const backendUrl = process.env.REACT_APP_BACKEND_URL || 'https://ai-avatar-chat-backend.onrender.com';
-          const fullAudioUrl = `${backendUrl}${data.audioUrl}`;
+          const fullAudioUrl = data.audioUrl.startsWith('http') 
+            ? data.audioUrl 
+            : `${backendUrl}${data.audioUrl}`;
           
           // Convert viseme format to the format expected by Avatar component
           const convertedVisemes = data.visemes.map(viseme => ({
@@ -402,6 +407,13 @@ function App() {
         
         // Instead of setting input, directly send the message
         if (transcript.trim()) {
+          // IMPORTANT: Force audio enabled for microphone input
+          // This ensures mobile microphone always gets audio responses
+          if (!audioEnabled) {
+            console.log('🎤 Microphone input - force enabling audio for mobile');
+            setAudioEnabled(true);
+          }
+          
           // Add user message to chat immediately
           const userMessage = { role: 'user', content: transcript };
           setMessages(prev => [...prev, userMessage]);
