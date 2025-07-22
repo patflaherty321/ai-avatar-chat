@@ -398,13 +398,24 @@ function App() {
         const transcript = event.results[0][0].transcript;
         console.log('🗣️ Speech recognition result:', transcript);
         
-        // Instead of setting input, directly send the message
+        // Process speech input with proper audio enabling (same as typed input)
         if (transcript.trim()) {
+          console.log('🔊 Microphone input - enabling audio for full audio+viseme response...');
+          
+          // Enable audio on microphone interaction (same logic as sendMessage)
+          if (!audioEnabled) {
+            console.log('🔊 First microphone interaction - enabling audio immediately...');
+            setAudioEnabled(true); // Set immediately for faster response
+            enableAudio().catch(error => {
+              console.warn('🔇 Audio enabling failed but continuing:', error);
+            });
+          }
+          
           // Add user message to chat immediately
           const userMessage = { role: 'user', content: transcript };
           setMessages(prev => [...prev, userMessage]);
           
-          // Send to AI backend
+          // Send to AI backend with audio enabled
           sendMessageToAI(transcript);
         }
         
