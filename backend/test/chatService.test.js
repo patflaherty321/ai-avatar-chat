@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createChatService } = require('../services/chatService');
+const OpenAI = require('openai');
 const azureSdk = require('microsoft-cognitiveservices-speech-sdk');
 
 const validEnv = {
@@ -90,6 +91,54 @@ test('uses a trimmed OPENAI_MODEL override', async () => {
   await f.service.generateResponse('Hello');
   assert.equal(f.calls[0].payload.model, 'custom-model');
 });
+
+function capturedTransport() {
+  const requests = [];
+  class OpenAIClient extends OpenAI {
+    constructor(config) {
+      super({ ...config, fetch: async (url, options) => {
+        requests.push({ url: String(url), body: JSON.parse(options.body), authorization: options.headers.authorization });
+        return new Response(JSON.stringify({
+          id: 'chatcmpl-test', object: 'chat.completion', created: 1, model: 'gpt-6-luna',
+          choices: [{ index: 0, message: { role: 'assistant', content: 'Hello from the configured endpoint.' }, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 }
+        }), { status: 200, headers: { 'content-type': 'application/json' } });
+      } });
+    }
+  }
+  return { OpenAIClient, requests };
+}
+
+test('sends chat to the injected Azure v1 endpoint using its deployment name', async () => {
+  const transport = capturedTransport();
+  const service = createChatService({
+    env: { ...validEnv, OPENAI_BASE_URL: '  https://example.openai.azure.com/openai/v1/  ', OPENAI_MODEL: '  echo-chat  ' },
+    OpenAIClient: transport.OpenAIClient
+  });
+  assert.equal(await service.generateResponse('Hello'), 'Hello from the configured endpoint.');
+  assert.equal(transport.requests.length, 1);
+  assert.equal(transport.requests[0].url, 'https://example.openai.azure.com/openai/v1/chat/completions');
+  assert.equal(transport.requests[0].body.model, 'echo-chat');
+  assert.equal(transport.requests[0].authorization, 'Bearer test-openai-key');
+});
+
+for (const endpoint of [undefined, '', ' \t ']) {
+  test(`keeps the OpenAI endpoint despite ambient configuration when OPENAI_BASE_URL is ${JSON.stringify(endpoint)}`, async t => {
+    const previous = process.env.OPENAI_BASE_URL;
+    process.env.OPENAI_BASE_URL = 'https://ambient.example/openai/v1/';
+    t.after(() => {
+      if (previous === undefined) delete process.env.OPENAI_BASE_URL;
+      else process.env.OPENAI_BASE_URL = previous;
+    });
+    const transport = capturedTransport();
+    const service = createChatService({
+      env: { ...validEnv, OPENAI_BASE_URL: endpoint }, OpenAIClient: transport.OpenAIClient
+    });
+    await service.generateResponse('Hello');
+    assert.equal(transport.requests.length, 1);
+    assert.equal(transport.requests[0].url, 'https://api.openai.com/v1/chat/completions');
+  });
+}
 
 for (const message of ['', ' \n\t ', null, undefined, 123, {}]) {
   test(`rejects invalid input ${JSON.stringify(message)} before providers`, async () => {

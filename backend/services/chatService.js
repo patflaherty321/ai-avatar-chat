@@ -47,6 +47,7 @@ function createChatService({
   audioDir = path.join(__dirname, '..', 'audio')
 } = {}) {
   const model = typeof env.OPENAI_MODEL === 'string' && env.OPENAI_MODEL.trim() ? env.OPENAI_MODEL.trim() : DEFAULT_MODEL;
+  const baseURL = (typeof env.OPENAI_BASE_URL === 'string' && env.OPENAI_BASE_URL.trim()) || 'https://api.openai.com/v1';
   let client;
 
   function validateConfiguration() {
@@ -60,7 +61,7 @@ function createChatService({
     if (!configured(env.OPENAI_API_KEY)) throw new ChatError('CONFIGURATION_ERROR');
     if (signal?.aborted) throw abortError();
     try {
-      if (!client) client = new OpenAIClient({ apiKey: env.OPENAI_API_KEY, maxRetries: 0, timeout: aiTimeoutMs });
+      if (!client) client = new OpenAIClient({ apiKey: env.OPENAI_API_KEY, baseURL, maxRetries: 0, timeout: aiTimeoutMs });
       const completion = await new Promise((resolve, reject) => {
         const upstreamAbort = new AbortController();
         let settled = false;

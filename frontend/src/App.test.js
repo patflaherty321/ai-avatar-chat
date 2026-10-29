@@ -406,3 +406,26 @@ test('silent playback rejection settles through the bounded fallback and release
     window.AudioContext = originalContext;
   }
 });
+
+test.each([0, 5000])('resizing from desktop to mobile at %sms keeps the same avatar without replaying audio', async elapsed => {
+  const originalWidth = window.innerWidth;
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1686 });
+  try {
+    global.fetch.mockImplementation(url => Promise.resolve(url.endsWith('/health') ? healthy() : reply()));
+    render(<App />);
+    await flush();
+    send();
+    await flush();
+    expect(mockPlayback).toHaveBeenCalledTimes(1);
+    await act(async () => { jest.advanceTimersByTime(elapsed); });
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+    fireEvent(window, new Event('resize'));
+    await act(async () => { jest.advanceTimersByTime(100); });
+    await flush();
+    expect(screen.getByRole('textbox')).toBeEnabled();
+    expect(screen.getByText('A helpful reply.')).toBeInTheDocument();
+    expect(mockPlayback).toHaveBeenCalledTimes(1);
+  } finally {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalWidth });
+  }
+});

@@ -122,6 +122,11 @@ function Avatar({
     lastAudioKeyRef.current = audioKey;
     console.log('[RIVE AVATAR] *** ENHANCED SYNC v6.0 *** Starting synchronized audio + lip sync with', visemes.length, 'visemes for key:', audioKey);
     
+    // These guards belong to this effect, including callbacks already queued by the browser.
+    let disposed = false;
+    let started = false;
+    let animationFrame = null;
+
     // Create audio element
     const audio = new Audio();
     
@@ -155,23 +160,27 @@ function Avatar({
     console.log('[RIVE AVATAR] Expected duration:', ((sortedVisemes[sortedVisemes.length - 1]?.timeMs || 0) / 1000).toFixed(2), 'seconds');
 
     // Setup audio event listeners
-    audio.addEventListener('canplaythrough', () => {
+    const onCanPlayThrough = () => {
+      if (disposed) return;
       console.log('[RIVE AVATAR] Audio preloaded and ready to play');
       // Start playback immediately when audio is ready
       if (lastAudioKeyRef.current === audioKey) {
         startEnhancedSync();
       }
-    });
+    };
     
-    audio.addEventListener('loadstart', () => {
+    const onLoadStart = () => {
       console.log('[RIVE AVATAR] Audio load started');
-    });
+    };
     
-    audio.addEventListener('loadeddata', () => {
+    const onLoadedData = () => {
       console.log('[RIVE AVATAR] ✅ Audio data loaded, duration:', audio.duration ? audio.duration.toFixed(2) + 's' : 'unknown');
-    });
+    };
     
-    audio.addEventListener('ended', () => {
+    const onEnded = () => {
+      if (disposed) return;
+      cancelAnimationFrame(animationFrame);
+      animationFrame = null;
       console.log('[RIVE AVATAR] Audio playback ended for key:', audioKey);
       // Stop talking when audio actually ends
       setInternalTalking(false);
@@ -184,9 +193,12 @@ function Avatar({
       if (visemeInput) {
         visemeInput.value = 0;
       }
-    });
+    };
     
-    audio.addEventListener('error', (e) => {
+    const onError = (e) => {
+      if (disposed) return;
+      cancelAnimationFrame(animationFrame);
+      animationFrame = null;
       console.error('[RIVE AVATAR] Audio error:', e);
       console.error('[RIVE AVATAR] Audio error details:', audio.error);
       // Stop talking on error
@@ -195,19 +207,19 @@ function Avatar({
       if (visemeInput) {
         visemeInput.value = 0;
       }
-    });
-
-    // Preload the audio but don't start playback yet
-    audio.load();
+    };
 
     // Define the enhanced synchronization function
     const startEnhancedSync = async () => {
+      if (disposed || started) return;
+      started = true;
       try {
         // Ensure user interaction has occurred
         console.log('[RIVE AVATAR] Attempting to start audio playback...');
         
         // Start audio playback
         await audio.play();
+        if (disposed) return;
         console.log('[RIVE AVATAR] ✅ Audio started successfully');
         console.log('[RIVE AVATAR] 📊 Audio duration:', Math.round(audio.duration * 1000), 'ms');
         console.log('[RIVE AVATAR] 📊 Viseme duration:', sortedVisemes[sortedVisemes.length - 1]?.timeMs || 0, 'ms');
@@ -221,6 +233,7 @@ function Avatar({
         
         // Remove the sync count limit - let it run until audio actually ends
         const syncVisemesToAudio = () => {
+          if (disposed) return;
           // Only stop if the audio is paused/ended or the component unmounted
           if (!audio || audio.paused || audio.ended || !visemeInput) {
             if (visemeInput) {
@@ -284,7 +297,7 @@ function Avatar({
           
           // Always continue syncing if audio is still playing
           if (!audio.paused && !audio.ended) {
-            requestAnimationFrame(syncVisemesToAudio);
+            animationFrame = requestAnimationFrame(syncVisemesToAudio);
           } else {
             // Audio finished, reset to neutral
             if (visemeInput) {
@@ -295,9 +308,10 @@ function Avatar({
         };
         
         // Start the real-time synchronization
-        requestAnimationFrame(syncVisemesToAudio);
+        animationFrame = requestAnimationFrame(syncVisemesToAudio);
         
       } catch (err) {
+        if (disposed) return;
         console.error('[RIVE AVATAR] Synchronized playback error:', err);
         if (err.name === 'NotAllowedError') {
           console.log('[RIVE AVATAR] Audio autoplay blocked. User interaction required.');
@@ -305,18 +319,28 @@ function Avatar({
       }
     };
 
-    // Cleanup function
+    const listeners = {
+      canplaythrough: onCanPlayThrough,
+      loadstart: onLoadStart,
+      loadeddata: onLoadedData,
+      ended: onEnded,
+      error: onError,
+    };
+    Object.entries(listeners).forEach(([event, handler]) => audio.addEventListener(event, handler));
+    // Preload only after all playback callbacks have been initialized.
+    audio.load();
+
     return () => {
+      disposed = true;
+      cancelAnimationFrame(animationFrame);
+      Object.entries(listeners).forEach(([event, handler]) => audio.removeEventListener(event, handler));
       visemeTimersRef.current.forEach(clearTimeout);
       visemeTimersRef.current = [];
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-        audioRef.current = null;
-      }
-      if (visemeInput) {
-        visemeInput.value = 0;
-      }
+      audio.pause();
+      audio.currentTime = 0;
+      if (audioRef.current === audio) audioRef.current = null;
+      if (lastAudioKeyRef.current === audioKey) lastAudioKeyRef.current = null;
+      // useRive may already have disposed its native inputs. Never write them here.
     };
   }, [audioUrl, visemes, visemeInput]); // Removed audioPreloaded from dependency array
 

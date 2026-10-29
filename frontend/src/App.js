@@ -654,7 +654,6 @@ function App() {
                   backgroundRepeat: 'no-repeat'
                 }}>
                   <Avatar
-                    key={`avatar-${calculateAvatarScale}`} // Force re-render when scale changes
                     isActive={true}
                     isTalking={isPlaying}
                     isThinking={requestPhase === 'thinking'}
