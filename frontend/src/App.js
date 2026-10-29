@@ -1,7 +1,24 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Avatar from './Avatar';
+import { getBackendConnection } from './backendConnection';
 import './App.css';
 import * as microsoftTeams from '@microsoft/teams-js';
+
+const backendUrl = (process.env.REACT_APP_BACKEND_URL || 'https://ai-avatar-chat-backend.onrender.com').replace(/\/+$/, '');
+const failureMessages = {
+  CONFIGURATION_ERROR: 'The companion is unavailable right now. Please try again later.',
+  MODEL_UNAVAILABLE: 'The companion is unavailable right now. Please try again later.',
+  RATE_LIMITED: 'The companion is busy. Please wait a moment and retry.',
+  AI_TIMEOUT: 'The reply took too long. Please retry your message.',
+  CHAT_TIMEOUT: 'The reply took too long. Please retry your message.',
+  AI_UNAVAILABLE: 'The companion could not reply right now. Please retry.',
+  EMPTY_RESPONSE: 'The companion could not finish a reply. Please retry.',
+  SPEECH_TIMEOUT: 'The voice response took too long. Please retry your message.',
+  SPEECH_UNAVAILABLE: 'The voice response is unavailable right now. Please retry.',
+  INVALID_REQUEST: 'That message could not be sent. Please check it and try again.',
+  INTERNAL_ERROR: 'Something went wrong. Please retry your message.',
+  CONNECTION_TIMEOUT: 'The companion could not connect. Please retry your message.',
+};
 
 function App() {
   const [messages, setMessages] = useState([
@@ -9,6 +26,45 @@ function App() {
   ]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [requestPhase, setRequestPhase] = useState('idle');
+  const connection = useMemo(() => getBackendConnection(backendUrl), []);
+  const [connectionState, setConnectionState] = useState(() => connection.getSnapshot());
+  const mountedRef = useRef(false);
+  const pendingSubmissionRef = useRef(null);
+  const nextSubmissionIdRef = useRef(0);
+  const activeRequestRef = useRef(null);
+  const playbackTimerRef = useRef(null);
+  const audioUnlockOperationRef = useRef(null);
+
+  const checkConnection = useCallback(() => {
+    // Background checks share the submission's readiness promise, never its POST.
+    connection.ensureReady().catch(() => {});
+  }, [connection]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    const unsubscribe = connection.subscribe(setConnectionState);
+    checkConnection();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') checkConnection();
+    };
+    window.addEventListener('focus', checkConnection);
+    window.addEventListener('pageshow', checkConnection);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      mountedRef.current = false;
+      pendingSubmissionRef.current = null;
+      activeRequestRef.current?.controller.abort();
+      clearTimeout(activeRequestRef.current?.timer);
+      clearTimeout(playbackTimerRef.current);
+      audioUnlockOperationRef.current?.cancel();
+      unsubscribe();
+      window.removeEventListener('focus', checkConnection);
+      window.removeEventListener('pageshow', checkConnection);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [connection, checkConnection]);
+
   const [audioUrl, setAudioUrl] = useState('');
   const [visemes, setVisemes] = useState([]);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -24,16 +80,6 @@ function App() {
 
   // Ref for auto-scrolling chat messages
   const messagesEndRef = useRef(null);
-
-  // Debug render state
-  console.log('🔄 App render state:', {
-    inputMessage: inputMessage.length,
-    isLoading,
-    isListening,
-    audioEnabled,
-    recognition: !!recognition,
-    messagesCount: messages.length
-  });
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -143,221 +189,188 @@ function App() {
 
 
 
-  const enableAudio = useCallback(async () => {
-    try {
-      console.log('🔊 Attempting to enable audio...');
-      
-      // Mobile-specific audio enablement with more aggressive approach
-      const audioPromise = new Promise(async (resolve, reject) => {
-        try {
-          // Create audio context with mobile compatibility
-          const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-          if (AudioContextClass) {
-            const audioContext = new AudioContextClass();
-            if (audioContext.state === 'suspended') {
-              await audioContext.resume();
-              console.log('🔊 Audio context resumed');
-            }
-          }
-          
-          // Create and play multiple silent audio attempts for mobile compatibility
-          const audio1 = new Audio();
-          const audio2 = new Audio();
-          
-          // Try different audio sources for maximum compatibility
-          audio1.src = 'data:audio/wav;base64,UklGRnoAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
-          audio2.src = 'data:audio/mpeg;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsuY29tIC8gTGFTb25vdGhlcXVlLm9yZwBURU5DAAAAHQAAATNTAG1wM1BST1YuNi4xLjEgKGNkYzIwMTEwKVRTU0UAAAAHAAABAEZ4Q0FQAAAAHQAAAQRFQVNUX0VYVEVOREVEXwhNUElNUVBNUUJFX0NQRU5DAAAA=';
-          
-          audio1.volume = 0.01;
-          audio2.volume = 0.01;
-          
-          // Mobile requires multiple attempts and different events
-          let resolved = false;
-          
-          const resolveOnce = (success) => {
-            if (!resolved) {
-              resolved = true;
-              resolve(success);
-            }
-          };
-          
-          // Try playing multiple audio sources
-          const tryPlay = async (audio, label) => {
-            try {
-              audio.load(); // Force load on mobile
-              await audio.play();
-              console.log(`🔊 ${label} audio play succeeded`);
-              resolveOnce(true);
-            } catch (error) {
-              console.warn(`🔇 ${label} audio play failed:`, error);
-            }
-          };
-          
-          // Set up event listeners for both audio elements
-          audio1.oncanplaythrough = () => tryPlay(audio1, 'Primary');
-          audio2.oncanplaythrough = () => tryPlay(audio2, 'Secondary');
-          
-          audio1.onerror = () => console.warn('🔇 Primary audio load failed');
-          audio2.onerror = () => console.warn('🔇 Secondary audio load failed');
-          
-          // Also try immediate play without waiting for canplaythrough
-          setTimeout(() => {
-            tryPlay(audio1, 'Primary-Immediate');
-            tryPlay(audio2, 'Secondary-Immediate');
-          }, 100);
-          
-          // Fallback timeout - consider it enabled even if silent play fails
-          setTimeout(() => {
-            console.log('🔊 Audio enablement timeout - continuing anyway for mobile compatibility');
-            resolveOnce(true);
-          }, 1500);
-          
-        } catch (error) {
-          reject(error);
+  const enableAudio = useCallback(() => {
+    if (audioUnlockOperationRef.current) return audioUnlockOperationRef.current.promise;
+    if (!mountedRef.current) return Promise.resolve(false);
+
+    const operation = { audio: [], timers: new Set(), context: null, settled: false };
+    operation.promise = new Promise(resolve => { operation.resolve = resolve; });
+    const finish = enabled => {
+      if (operation.settled) return;
+      operation.settled = true;
+      operation.timers.forEach(clearTimeout);
+      operation.timers.clear();
+      operation.audio.forEach(audio => {
+        audio.oncanplaythrough = null;
+        audio.onerror = null;
+        audio.pause();
+        audio.removeAttribute('src');
+      });
+      if (operation.context?.close) {
+        try { Promise.resolve(operation.context.close()).catch(() => {}); } catch (_) {}
+      }
+      if (audioUnlockOperationRef.current === operation) audioUnlockOperationRef.current = null;
+      if (enabled && mountedRef.current) setAudioEnabled(true);
+      operation.resolve(enabled);
+    };
+    operation.cancel = () => finish(false);
+    audioUnlockOperationRef.current = operation;
+    const schedule = (callback, delay) => {
+      if (operation.settled) return;
+      const timer = setTimeout(() => {
+        operation.timers.delete(timer);
+        if (!operation.settled) callback();
+      }, delay);
+      operation.timers.add(timer);
+    };
+
+    // Keep the existing fail-open deadline even if resuming the context stalls.
+    schedule(() => finish(true), 2000);
+    const prepare = async () => {
+      try {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) {
+          operation.context = new AudioContextClass();
+          if (operation.context.state === 'suspended') await operation.context.resume();
+          if (operation.settled) return;
         }
-      });
-      
-      // Shorter timeout for mobile responsiveness
-      const timeoutPromise = new Promise((resolve) => {
-        setTimeout(() => {
-          console.warn('⏰ Audio enablement timed out - enabling anyway for mobile');
-          resolve(true);
-        }, 2000);
-      });
-      
-      await Promise.race([audioPromise, timeoutPromise]);
-      
-      setAudioEnabled(true);
-      console.log('✅ Audio enabled for mobile compatibility');
-    } catch (error) {
-      console.warn('❌ Could not enable audio:', error);
-      setAudioEnabled(true); // Always enable for mobile compatibility
-    }
+        const sources = [
+          'data:audio/wav;base64,UklGRnoAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=',
+          'data:audio/mpeg;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsuY29tIC8gTGFTb25vdGhlcXVlLm9yZwBURU5DAAAAHQAAATNTAG1wM1BST1YuNi4xLjEgKGNkYzIwMTEwKVRTU0UAAAAHAAABAEZ4Q0FQAAAAHQAAAQRFQVNUX0VYVEVOREVEXwhNUElNUVBNUUJFX0NQRU5DAAAA=',
+        ];
+        const attempts = sources.map(src => {
+          const audio = new Audio();
+          operation.audio.push(audio);
+          let attempted = false;
+          const tryPlay = () => {
+            if (operation.settled || attempted) return;
+            attempted = true;
+            try {
+              Promise.resolve(audio.play()).then(() => finish(true), () => {});
+            } catch (_) {
+              // The bounded fallback still allows normal companion audio later.
+            }
+          };
+          audio.oncanplaythrough = tryPlay;
+          audio.src = src;
+          audio.volume = 0.01;
+          // Load once here. Loading inside canplaythrough creates a feedback loop.
+          audio.load();
+          return tryPlay;
+        });
+        schedule(() => attempts.forEach(tryPlay => tryPlay()), 100);
+        schedule(() => finish(true), 1500);
+      } catch (_) {
+        finish(true);
+      }
+    };
+    prepare();
+    return operation.promise;
   }, []);
 
-  const sendMessageToAI = useCallback(async (messageText) => {
-    console.log('📤 sendMessageToAI called with:', messageText);
-    if (!messageText.trim() || isLoading) {
-      console.log('❌ Message rejected - empty or loading');
-      return;
-    }
+  const sendMessageToAI = useCallback(async (messageText, retryId) => {
+    if (!messageText.trim() || pendingSubmissionRef.current || !mountedRef.current) return;
 
+    // The ref closes the gap before React commits disabled button state.
+    const submission = { id: retryId || `submission-${++nextSubmissionIdRef.current}`, text: messageText };
+    pendingSubmissionRef.current = submission;
     setIsLoading(true);
-
-    try {
-      console.log('🚀 Sending message to API:', messageText);
-      const backendUrl = process.env.REACT_APP_BACKEND_URL || 'https://ai-avatar-chat-backend.onrender.com';
-      
-      // Always request audio if user has interacted with the app (mobile fix)
-      const requestBody = {
-        message: messageText,
-        includeAudio: true, // Always true for simplicity
-        userAgent: navigator.userAgent, // Send user agent for mobile detection
-        isMobile: /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) // Explicit mobile flag
-      };
-      
-      console.log('📤 Request body:', requestBody);
-      console.log('📱 Mobile device:', requestBody.isMobile);
-      
-      const response = await fetch(`${backendUrl}/api/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      console.log('📡 Response status:', response.status, response.statusText);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ API Error Response:', errorText);
-        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
-      }
-
-      const data = await response.json();
-      console.log('✅ API Response data:', data);
-      console.log('🔍 Mobile Response Debug:', {
-        isMobile: /iPhone|iPad|iPod|Android/i.test(navigator.userAgent),
-        hasAudioUrl: !!data.audioUrl,
-        hasVisemes: !!data.visemes,
-        audioUrl: data.audioUrl,
-        visemeCount: data.visemes?.length || 0,
-        responseType: data.audioUrl ? 'AUDIO_RESPONSE' : 'TEXT_ONLY_RESPONSE',
-        audioEnabled: audioEnabled,
-        userAgent: navigator.userAgent.substring(0, 50) + '...'
-      });
-      
-      // Add AI response to chat
-      const aiMessage = { role: 'assistant', content: data.response || data.text || data.message };
-      setMessages(prev => [...prev, aiMessage]);
-
-      // Check if response includes audio and visemes (new format from our backend)
-      // Always process audio if available, since user has already enabled it by sending a message
-      if (data.audioUrl && data.visemes) {
-        try {
-          console.log('🎵 Processing response with audio and visemes...');
-          console.log('🎵 Audio URL:', data.audioUrl);
-          console.log('🎵 Viseme data count:', data.visemes?.length || 0);
-          
-          // Create full audio URL from relative path
-          const backendUrl = process.env.REACT_APP_BACKEND_URL || 'https://ai-avatar-chat-backend.onrender.com';
-          const fullAudioUrl = data.audioUrl.startsWith('http') 
-            ? data.audioUrl 
-            : `${backendUrl}${data.audioUrl}`;
-          
-          // Convert viseme format to the format expected by Avatar component
-          const convertedVisemes = data.visemes.map(viseme => ({
-            timeMs: viseme.timeMs,
-            visemeId: viseme.visemeId
-          }));
-          
-          console.log('🎵 Setting audio and visemes:', fullAudioUrl, convertedVisemes.length, 'visemes');
-          setAudioUrl(fullAudioUrl);
-          setVisemes(convertedVisemes);
-          setIsPlaying(true);
-          
-          // Reset playing state after audio duration (estimated from last viseme)
-          const lastVisemeTime = convertedVisemes[convertedVisemes.length - 1]?.timeMs || 3000;
-          setTimeout(() => {
-            setIsPlaying(false);
-          }, lastVisemeTime + 1000);
-          
-        } catch (audioError) {
-          console.error('❌ Error processing audio/visemes:', audioError);
-        }
-      } else {
-        console.log('💬 No audio/visemes in response - text-only chat mode');
-        console.log('🔍 Detailed debugging:', {
-          audioEnabled: audioEnabled,
-          audioEnabledType: typeof audioEnabled,
-          hasAudioUrl: !!data.audioUrl,
-          hasVisemeData: !!data.visemes,
-          audioUrlType: typeof data.audioUrl,
-          visemeDataType: typeof data.visemes,
-          audioUrl: data.audioUrl || 'none',
-          visemeDataLength: data.visemes?.length || 0,
-          responseKeys: Object.keys(data),
-          conditionResults: {
-            audioEnabled_check: !!audioEnabled,
-            audioUrl_check: !!data.audioUrl,
-            visemeData_check: !!data.visemes,
-            overallCondition: !!(audioEnabled && data.audioUrl && data.visemes)
-          }
-        });
-      }
-
-    } catch (error) {
-      console.error('❌ Error sending message - Full error object:', error);
-      console.error('❌ Error name:', error.name);
-      console.error('❌ Error message:', error.message);
-      console.error('❌ Error stack:', error.stack);
-      const errorMessage = { role: 'assistant', content: `Sorry, I encountered an error: ${error.message}. Please try again.` };
-      setMessages(prev => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
+    setRequestPhase('waiting');
+    if (retryId) {
+      setMessages(previous => previous.map(message => message.id === retryId
+        ? { ...message, status: 'pending', error: null } : message));
+    } else {
+      setMessages(previous => [...previous, { role: 'user', content: messageText, id: submission.id, status: 'pending' }]);
     }
-  }, [isLoading, audioEnabled]);
+
+    const isCurrent = () => mountedRef.current && pendingSubmissionRef.current === submission;
+    let request;
+    let removeAbortListener;
+    try {
+      await connection.ensureReady();
+      if (!isCurrent()) return;
+      setRequestPhase('thinking');
+      request = { controller: new AbortController(), timedOut: false };
+      activeRequestRef.current = request;
+      const cancelled = new Promise((resolve, reject) => {
+        const onAbort = () => {
+          const error = new Error('Request cancelled');
+          error.code = request.timedOut ? 'CHAT_TIMEOUT' : 'CANCELLED';
+          reject(error);
+        };
+        request.controller.signal.addEventListener('abort', onAbort, { once: true });
+        removeAbortListener = () => request.controller.signal.removeEventListener('abort', onAbort);
+      });
+      request.timer = setTimeout(() => {
+        request.timedOut = true;
+        request.controller.abort();
+      }, 60000);
+      const responseData = async () => {
+        const response = await fetch(`${backendUrl}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: request.controller.signal,
+          body: JSON.stringify({
+            message: messageText,
+            includeAudio: true,
+            userAgent: navigator.userAgent,
+            isMobile: /iPhone|iPad|iPod|Android/i.test(navigator.userAgent),
+          }),
+        });
+        const data = await response.json();
+        if (!response.ok || data.success === false) {
+          const error = new Error('Chat failed');
+          error.code = data.code || data.error?.code || 'AI_UNAVAILABLE';
+          error.requestId = data.requestId || data.error?.requestId;
+          throw error;
+        }
+        const text = data.response || data.text || data.message;
+        if (typeof text !== 'string' || !text.trim()) {
+          const error = new Error('Empty response');
+          error.code = 'EMPTY_RESPONSE';
+          throw error;
+        }
+        return { ...data, response: text };
+      };
+      // Bound both fetch and body parsing, including transports that ignore abort.
+      const data = await Promise.race([responseData(), cancelled]);
+      if (!isCurrent()) return;
+      setMessages(previous => [
+        ...previous.map(message => message.id === submission.id ? { ...message, status: 'sent', error: null } : message),
+        { role: 'assistant', content: data.response },
+      ]);
+
+      if (typeof data.audioUrl === 'string' && data.audioUrl && Array.isArray(data.visemes)
+          && data.visemes.every(viseme => viseme && Number.isFinite(viseme.timeMs) && Number.isFinite(viseme.visemeId))) {
+        const fullAudioUrl = data.audioUrl.startsWith('http') ? data.audioUrl : `${backendUrl}${data.audioUrl}`;
+        const convertedVisemes = data.visemes.map(viseme => ({ timeMs: viseme.timeMs, visemeId: viseme.visemeId }));
+        setAudioUrl(fullAudioUrl);
+        setVisemes(convertedVisemes);
+        setIsPlaying(true);
+        clearTimeout(playbackTimerRef.current);
+        const lastVisemeTime = convertedVisemes[convertedVisemes.length - 1]?.timeMs || 3000;
+        playbackTimerRef.current = setTimeout(() => {
+          if (mountedRef.current) setIsPlaying(false);
+        }, lastVisemeTime + 1000);
+      }
+    } catch (error) {
+      if (!isCurrent()) return;
+      const code = request?.timedOut ? 'CHAT_TIMEOUT' : error.code;
+      const friendlyError = typeof failureMessages[code] === 'string'
+        ? failureMessages[code] : 'The companion could not reply. Check your connection and retry.';
+      setMessages(previous => previous.map(message => message.id === submission.id
+        ? { ...message, status: 'failed', error: friendlyError } : message));
+    } finally {
+      clearTimeout(request?.timer);
+      removeAbortListener?.();
+      if (activeRequestRef.current === request) activeRequestRef.current = null;
+      if (isCurrent()) {
+        pendingSubmissionRef.current = null;
+        setIsLoading(false);
+        setRequestPhase('idle');
+      }
+    }
+  }, [connection]);
 
   // Initialize speech recognition
   useEffect(() => {
@@ -400,7 +413,7 @@ function App() {
       
       recognitionInstance.onresult = (event) => {
         const transcript = event.results[0][0].transcript;
-        console.log('🗣️ Speech recognition result:', transcript);
+
         
         // Instead of setting input, directly send the message
         if (transcript.trim()) {
@@ -410,10 +423,6 @@ function App() {
             console.log('🎤 Microphone input - force enabling audio for mobile');
             setAudioEnabled(true);
           }
-          
-          // Add user message to chat immediately
-          const userMessage = { role: 'user', content: transcript };
-          setMessages(prev => [...prev, userMessage]);
           
           // Send to AI backend
           sendMessageToAI(transcript);
@@ -442,39 +451,21 @@ function App() {
     }
   }, [sendMessageToAI, isInTeams, audioEnabled, enableAudio]);
 
-  const sendMessage = useCallback(async () => {
-    console.log('📝 sendMessage called with inputMessage:', inputMessage);
-    if (!inputMessage.trim() || isLoading) {
-      console.log('❌ sendMessage rejected - empty or loading');
-      return;
-    }
-
-    // Enable audio on user interaction (immediately, don't wait)
+  const sendMessage = useCallback(() => {
+    if (!inputMessage.trim() || pendingSubmissionRef.current) return;
+    // Preserve the existing gesture-triggered audio unlock before any await.
     if (!audioEnabled) {
-      console.log('🔊 First interaction - enabling audio immediately...');
-      setAudioEnabled(true); // Set immediately for faster response
-      enableAudio().catch(error => {
-        console.warn('🔇 Audio enabling failed but continuing:', error);
-      });
+      setAudioEnabled(true);
+      enableAudio().catch(() => {});
     }
-
-    // Add user message to chat
-    const userMessage = { role: 'user', content: inputMessage };
-    setMessages(prev => [...prev, userMessage]);
-    
-    // Send to AI and clear input
     const messageToSend = inputMessage;
     setInputMessage('');
-    
-    // Don't await audio enabling, just continue
-    console.log('🚀 Proceeding to send message to AI...');
-    await sendMessageToAI(messageToSend);
-  }, [inputMessage, isLoading, audioEnabled, enableAudio, sendMessageToAI]);
+    sendMessageToAI(messageToSend);
+  }, [inputMessage, audioEnabled, enableAudio, sendMessageToAI]);
 
-  const handleKeyPress = useCallback((e) => {
-    console.log('⌨️ Key pressed:', e.key);
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
+  const handleKeyPress = useCallback((event) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
       sendMessage();
     }
   }, [sendMessage]);
@@ -666,7 +657,7 @@ function App() {
                     key={`avatar-${calculateAvatarScale}`} // Force re-render when scale changes
                     isActive={true}
                     isTalking={isPlaying}
-                    isThinking={isLoading}
+                    isThinking={requestPhase === 'thinking'}
                     visemes={visemes}
                     audioUrl={audioUrl}
                     audioEnabled={audioEnabled}
@@ -720,12 +711,29 @@ function App() {
                         textAlign: message.role === 'user' ? 'right' : 'left'
                       }}>
                         {message.content}
+                        {message.status === 'failed' && (
+                          <div style={{ marginTop: '8px' }}>
+                            <div role="alert">{message.error}</div>
+                            <button
+                              aria-label="Retry message"
+                              disabled={isLoading}
+                              onClick={() => sendMessageToAI(message.content, message.id)}
+                              style={{ marginTop: '6px', cursor: isLoading ? 'wait' : 'pointer' }}
+                            >Retry</button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
                   
-                  {isLoading && (
-                    <div style={{
+                  {connectionState.status === 'error' && !isLoading && !messages.some(message => message.status === 'failed') && (
+                    <div role="alert" style={{ padding: '12px 16px', backgroundColor: 'white', borderRadius: '16px', fontSize: '14px' }}>
+                      The companion could not connect. You can keep typing and retry when you’re ready.
+                      <button onClick={checkConnection} style={{ marginLeft: '8px' }}>Retry connection</button>
+                    </div>
+                  )}
+                  {(isLoading || connectionState.status === 'waking') && (
+                    <div role="status" aria-live="polite" style={{
                       display: 'flex',
                       justifyContent: 'flex-start',
                       alignItems: 'flex-start'
@@ -762,7 +770,7 @@ function App() {
                           backgroundColor: '#666',
                           animation: 'pulse 1.5s infinite 0.4s'
                         }} />
-                        <span style={{ marginLeft: '6px' }}>Thinking...</span>
+                        <span style={{ marginLeft: '6px' }}>{requestPhase === 'thinking' ? 'Thinking…' : 'Waking up the companion…'}</span>
                       </div>
                     </div>
                   )}
@@ -875,13 +883,11 @@ function App() {
                   type="text"
                   value={inputMessage}
                   onChange={(e) => {
-                    console.log('📝 Input changed:', e.target.value);
                     setInputMessage(e.target.value);
+                    checkConnection();
                   }}
-                  onKeyPress={handleKeyPress}
-                  onFocus={() => console.log('🎯 Input focused')}
-                  onBlur={() => console.log('👋 Input blurred')}
-                  onClick={() => console.log('🖱️ Input clicked')}
+                  onKeyDown={handleKeyPress}
+                  onFocus={checkConnection}
                   placeholder={
                     isListening 
                       ? "Listening..." 
@@ -905,10 +911,8 @@ function App() {
                 
                 {/* Send Button inside input */}
                 <button
-                  onClick={() => {
-                    console.log('📤 Send button clicked');
-                    sendMessage();
-                  }}
+                  aria-label="Send message"
+                  onClick={sendMessage}
                   disabled={!inputMessage.trim() || isLoading || isListening}
                   style={{
                     position: 'absolute',
