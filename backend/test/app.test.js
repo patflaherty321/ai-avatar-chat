@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { gzipSync, deflateSync } = require('node:zlib');
 const express = require('express');
 
 // Observe startup without binding the legacy app to its production port.
@@ -95,6 +96,33 @@ test('an unsupported JSON charset is an INVALID_REQUEST', async () => {
   });
   assert.deepEqual(f.calls, []);
 });
+
+for (const [contentType, content] of [
+  ['application/json', JSON.stringify({ message: 'Hi' })],
+  ['application/x-www-form-urlencoded', 'message=Hi']
+]) {
+  for (const [encoding, compress] of [['gzip', gzipSync], ['deflate', deflateSync]]) {
+    test(`rejects ${encoding} ${contentType} bodies and remains healthy after trailing bytes`, async () => {
+      const f = testApp();
+      const compressed = compress(content);
+      await serve(f.app, async base => {
+        for (const body of [compressed, Buffer.concat([compressed, Buffer.from('trailing bytes')])]) {
+          const response = await fetch(`${base}/api/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': contentType, 'Content-Encoding': encoding },
+            body
+          });
+          assert.equal(response.status, 400);
+          const error = await response.json();
+          assert.equal(error.code, 'INVALID_REQUEST');
+          assert.equal(error.success, false);
+          assert.equal((await fetch(`${base}/health`)).status, 200);
+        }
+      });
+      assert.deepEqual(f.calls, []);
+    });
+  }
+}
 
 test('an error after headers is logged safely without forwarding a raw error to Express', async () => {
   const events = [];

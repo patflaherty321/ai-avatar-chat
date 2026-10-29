@@ -24,8 +24,8 @@ function createApp({ env = process.env, chatService = createChatService({ env })
     res.set('X-Request-Id', req.requestId);
     next();
   });
-  app.use(express.json({ limit: '10mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+  app.use(express.json({ limit: '10mb', inflate: false }));
+  app.use(express.urlencoded({ extended: true, limit: '10mb', inflate: false }));
   app.use('/audio', express.static(audioDir));
   app.get('/health', (req, res) => {
     res.json({ status: 'healthy', check: 'liveness', model, timestamp: new Date().toISOString(), version: '1.0.0' });
